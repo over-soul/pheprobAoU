@@ -195,33 +195,43 @@ binomial_mixture_e_step <- function(S, C, p_1, p_0, alpha_0, alpha_1) {
   # Calculate prior probabilities (healthcare utilization effect)
   phi <- plogis(alpha_0 + alpha_1 * C)  # P(Y = 1 | C)
   
-  # Calculate binomial likelihoods
+  # Calculate log binomial likelihoods to prevent overflow
   # Add small regularization to prevent log(0)
-  lik_case <- dbinom(S, size = C, prob = pmax(p_1, 1e-10), log = FALSE)
-  lik_control <- dbinom(S, size = C, prob = pmax(p_0, 1e-10), log = FALSE)
+  log_lik_case <- dbinom(S, size = C, prob = pmax(p_1, 1e-10), log = TRUE)
+  log_lik_control <- dbinom(S, size = C, prob = pmax(p_0, 1e-10), log = TRUE)
   
-  # Calculate weighted likelihoods
-  weighted_lik_case <- phi * lik_case
-  weighted_lik_control <- (1 - phi) * lik_control
+  # Calculate log weighted likelihoods
+  log_weighted_lik_case <- log(pmax(phi, 1e-300)) + log_lik_case
+  log_weighted_lik_control <- log(pmax(1 - phi, 1e-300)) + log_lik_control
   
-  # Marginal likelihood (denominator for Bayes rule)
-  marginal_likelihood <- weighted_lik_case + weighted_lik_control
-  
-  # Handle numerical issues
-  marginal_likelihood[marginal_likelihood < 1e-300] <- 1e-300
+  # Use log-sum-exp trick for numerical stability
+  max_log_lik <- pmax(log_weighted_lik_case, log_weighted_lik_control)
+  log_marginal_likelihood <- max_log_lik + log(
+    exp(log_weighted_lik_case - max_log_lik) + 
+    exp(log_weighted_lik_control - max_log_lik)
+  )
   
   # Posterior probabilities P(Y = y | S, C) - the "responsibilities"
-  gamma_case <- weighted_lik_case / marginal_likelihood  # P(Y = 1 | S, C)
-  gamma_control <- weighted_lik_control / marginal_likelihood  # P(Y = 0 | S, C)
+  gamma_case <- exp(log_weighted_lik_case - log_marginal_likelihood)  # P(Y = 1 | S, C)
+  gamma_control <- exp(log_weighted_lik_control - log_marginal_likelihood)  # P(Y = 0 | S, C)
+  
+  # Handle any remaining numerical issues
+  gamma_case[is.nan(gamma_case) | is.infinite(gamma_case)] <- 0.5
+  gamma_control[is.nan(gamma_control) | is.infinite(gamma_control)] <- 0.5
+  
+  # Ensure probabilities sum to 1
+  total_gamma <- gamma_case + gamma_control
+  gamma_case <- gamma_case / total_gamma
+  gamma_control <- gamma_control / total_gamma
   
   # Log-likelihood
-  log_likelihood <- sum(log(marginal_likelihood))
+  log_likelihood <- sum(log_marginal_likelihood)
   
   return(list(
     posterior_probabilities = cbind(control = gamma_control, case = gamma_case),
     phenotype_probabilities = gamma_case,  # This is what we want: P(Y = 1 | S, C)
     log_likelihood = log_likelihood,
-    component_likelihoods = list(case = lik_case, control = lik_control),
+    component_log_likelihoods = list(case = log_lik_case, control = log_lik_control),
     prior_probabilities = phi
   ))
 }
@@ -262,6 +272,10 @@ binomial_mixture_m_step <- function(S, C, gamma, regularization = 1e-8) {
   # Update alpha_0, alpha_1 using weighted logistic regression
   # phi(c) = logistic(alpha_0 + alpha_1 * c)
   # We want to fit: gamma_case ~ logistic(alpha_0 + alpha_1 * C)
+  
+  # Initialize variables to ensure they're always defined
+  alpha_0 <- 0
+  alpha_1 <- 0
   
   tryCatch({
     # Weighted logistic regression
