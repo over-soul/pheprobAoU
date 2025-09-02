@@ -255,14 +255,20 @@ binomial_mixture_m_step <- function(S, C, gamma, regularization = 1e-8) {
   gamma_control <- gamma[, "control"]
   
   # Update p_1 (success probability for cases)
-  # Weighted average of success rates
-  weighted_successes_case <- sum(gamma_case * S)
-  weighted_trials_case <- sum(gamma_case * C)
+  # Use more robust computation to avoid overflow
+  # Convert to doubles and use chunked computation if needed
+  S_double <- as.double(S)
+  C_double <- as.double(C)
+  gamma_case_double <- as.double(gamma_case)
+  gamma_control_double <- as.double(gamma_control)
+  
+  weighted_successes_case <- sum(gamma_case_double * S_double)
+  weighted_trials_case <- sum(gamma_case_double * C_double)
   p_1 <- weighted_successes_case / (weighted_trials_case + regularization)
   
   # Update p_0 (success probability for controls)
-  weighted_successes_control <- sum(gamma_control * S)
-  weighted_trials_control <- sum(gamma_control * C)
+  weighted_successes_control <- sum(gamma_control_double * S_double)
+  weighted_trials_control <- sum(gamma_control_double * C_double)
   p_0 <- weighted_successes_control / (weighted_trials_control + regularization)
   
   # Ensure probabilities are in valid range
@@ -278,11 +284,11 @@ binomial_mixture_m_step <- function(S, C, gamma, regularization = 1e-8) {
   alpha_1 <- 0
   
   tryCatch({
-    # Weighted logistic regression
-    logit_fit <- glm(gamma_case ~ C, 
-                    family = binomial(), 
-                    weights = rep(1, length(C)),  # Could use gamma weights here
-                    start = c(0, 0))
+    # Use quasi-binomial for continuous response probabilities
+    # This handles probabilities better than strict binomial
+    logit_fit <- glm(gamma_case_double ~ C_double, 
+                    family = quasibinomial(), 
+                    weights = rep(1, length(C_double)))
     
     alpha_0 <- as.numeric(coef(logit_fit)[1])
     alpha_1 <- as.numeric(coef(logit_fit)[2])
@@ -292,16 +298,24 @@ binomial_mixture_m_step <- function(S, C, gamma, regularization = 1e-8) {
     if (is.na(alpha_1)) alpha_1 <- 0
     
   }, error = function(e) {
-    # Fallback: simple logistic regression without weights
+    # Fallback: simple approach based on empirical relationships
     cli::cli_alert_warning("Weighted logistic regression failed, using simple approach")
     
-    # Simple update based on correlation
-    mean_gamma <- mean(gamma_case)
+    # Simple update based on mean and correlation
+    mean_gamma <- mean(gamma_case_double)
     alpha_0 <- qlogis(pmax(pmin(mean_gamma, 1 - regularization), regularization))
     
-    # Simple correlation-based update for alpha_1
-    cor_gamma_C <- cor(gamma_case, C)
-    alpha_1 <- cor_gamma_C * 0.1  # Conservative scaling
+    # Simple correlation-based update for alpha_1 - check for zero variance
+    if (length(unique(gamma_case_double)) > 1 && length(unique(C_double)) > 1) {
+      cor_gamma_C <- cor(gamma_case_double, C_double)
+      if (!is.na(cor_gamma_C)) {
+        alpha_1 <- cor_gamma_C * 0.01  # Very conservative scaling
+      } else {
+        alpha_1 <- 0
+      }
+    } else {
+      alpha_1 <- 0
+    }
   })
   
   return(list(
