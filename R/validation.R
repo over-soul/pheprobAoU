@@ -475,8 +475,18 @@ analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains
         
         # Warn if too many domains
         if (unique_domains > max_domains_per_phenotype) {
-        warnings <- c(warnings, 
-                     glue::glue("Phenotype '{phenotype_name}' may span too many domains ({unique_domains} > {max_domains_per_phenotype})"))
+          warnings <- c(warnings, 
+                       glue::glue("Phenotype '{phenotype_name}' may span too many domains ({unique_domains} > {max_domains_per_phenotype})"))
+        }
+      } else {
+        cli::cli_alert_warning("No concept information found for '{phenotype_name}'")
+        domain_analysis[[phenotype_name]] <- list(
+          n_concepts = length(concept_ids),
+          unique_domains = 0,
+          domain_breakdown = NA,
+          coherence_score = NA,
+          concept_details = NULL
+        )
       }
       
     }, error = function(e) {

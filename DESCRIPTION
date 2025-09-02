@@ -2,6 +2,8 @@ Package: pheprobAoU
 Type: Package
 Title: Calculate PheProb (Phenotype Probabilities) Using All of Us EHR Data
 Version: 1.0.0
+Author: Alireza Ehteshami [aut, cre] (<https://orcid.org/0009-0001-9637-1695>)
+Maintainer: Alireza Ehteshami <alireza.ehteshami@emory.edu>
 Authors@R: 
     person("Alireza", "Ehteshami", email = "alireza.ehteshami@emory.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0001-9637-1695"))
