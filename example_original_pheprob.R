@@ -1,9 +1,14 @@
 # Example: PheProb Implementation
 # 
 # This script demonstrates the PheProb binomial mixture model methodology.
+# 
+# NOTE: This package now automatically detects your environment:
+# - In All of Us Research Workbench: Uses optimized AllofUs-native data extraction
+# - In local environments: Falls back to legacy approach or simulation
 
 # Load the package
 library(pheprobAoU)
+# Package will auto-connect in All of Us environment and show appropriate messages
 
 # =============================================================================
 # EXAMPLE 1: Basic PheProb Calculation

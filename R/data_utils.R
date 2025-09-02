@@ -193,6 +193,55 @@ prepare_pheprob_binomial_data <- function(concept_ids,
                                          exclude_concepts = NULL,
                                          max_persons = NULL) {
   
+  # Check if we're in All of Us environment
+  if (is_aou_environment()) {
+    # Use the new AllofUs-native approach
+    cli::cli_alert_info("Using AllofUs-native data extraction")
+    
+    # Map domain names to OMOP table names
+    domain_mapping <- c(
+      "condition" = "condition_occurrence",
+      "procedure" = "procedure_occurrence", 
+      "drug" = "drug_exposure",
+      "measurement" = "measurement",
+      "observation" = "observation"
+    )
+    
+    omop_domains <- domain_mapping[domains]
+    omop_domains <- omop_domains[!is.na(omop_domains)]
+    
+    return(prepare_pheprob_binomial_data_allofus(
+      concept_ids = concept_ids,
+      person_ids = person_ids,
+      domains = omop_domains,
+      date_range = date_range,
+      exclude_concepts = exclude_concepts,
+      max_persons = max_persons
+    ))
+    
+  } else {
+    # Fall back to original approach (for local testing/development)
+    cli::cli_alert_info("Using legacy SQL approach (local environment)")
+    return(prepare_pheprob_binomial_data_legacy(
+      concept_ids = concept_ids,
+      person_ids = person_ids,
+      domains = domains,
+      date_range = date_range,
+      exclude_concepts = exclude_concepts,
+      max_persons = max_persons
+    ))
+  }
+}
+
+#' Legacy Data Preparation (for local environments)
+#' @keywords internal
+prepare_pheprob_binomial_data_legacy <- function(concept_ids,
+                                                 person_ids = NULL,
+                                                 domains = c("condition", "procedure", "drug", "measurement", "observation"),
+                                                 date_range = NULL,
+                                                 exclude_concepts = NULL,
+                                                 max_persons = NULL) {
+  
   # Validate concept IDs
   if (!is.numeric(concept_ids) || length(concept_ids) == 0) {
     cli::cli_abort("concept_ids must be a non-empty numeric vector")
@@ -395,6 +444,14 @@ extract_domain_features <- function(table_name, concept_ids, person_ids, date_ra
   # Convert to integer to ensure safety
   safe_concept_ids <- as.integer(concept_ids)
   
+  # Get dataset prefix (configurable via option)
+  dataset_prefix <- getOption("pheprobAoU.dataset", "")
+  full_table_name <- if (nzchar(dataset_prefix)) {
+    paste0(dataset_prefix, ".", table_name)
+  } else {
+    table_name
+  }
+  
   # Base query
   base_query <- glue::glue("
     SELECT 
@@ -405,7 +462,7 @@ extract_domain_features <- function(table_name, concept_ids, person_ids, date_ra
       MIN({date_column}) OVER (PARTITION BY person_id, {concept_column}) as first_occurrence_date,
       MAX({date_column}) OVER (PARTITION BY person_id, {concept_column}) as last_occurrence_date,
       ROW_NUMBER() OVER (PARTITION BY person_id, {concept_column} ORDER BY {date_column}) as rn
-    FROM {table_name}
+    FROM {full_table_name}
     WHERE {concept_column} IN ({paste(safe_concept_ids, collapse = ', ')})
   ")
   
@@ -562,10 +619,18 @@ add_concept_names <- function(features_data) {
   unique_concept_ids <- unique(features_data$concept_id)
   
   tryCatch({
+    # Get dataset prefix (configurable via option)
+    dataset_prefix <- getOption("pheprobAoU.dataset", "")
+    concept_table <- if (nzchar(dataset_prefix)) {
+      paste0(dataset_prefix, ".concept")
+    } else {
+      "concept"
+    }
+    
     concept_names <- allofus::aou_sql(
       glue::glue("
         SELECT concept_id, concept_name, vocabulary_id, concept_class_id
-        FROM concept 
+        FROM {concept_table} 
         WHERE concept_id IN ({paste(unique_concept_ids, collapse = ', ')})
       ")
     )

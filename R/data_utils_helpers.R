@@ -250,6 +250,14 @@ extract_domain_total_counts <- function(table_name,
 #' @keywords internal
 create_total_count_query <- function(table_name, person_ids, date_range, exclude_concepts) {
   
+  # Get dataset prefix (configurable via option)
+  dataset_prefix <- getOption("pheprobAoU.dataset", "")
+  full_table_name <- if (nzchar(dataset_prefix)) {
+    paste0(dataset_prefix, ".", table_name)
+  } else {
+    table_name
+  }
+  
   # Determine date column name based on table
   date_column <- switch(table_name,
     "condition_occurrence" = "condition_start_date",
@@ -279,7 +287,7 @@ create_total_count_query <- function(table_name, person_ids, date_range, exclude
       MAX({date_column}) as last_occurrence
   ")
   
-  from_clause <- glue::glue("FROM {table_name}")
+  from_clause <- glue::glue("FROM {full_table_name}")
   
   where_conditions <- character(0)
   
