@@ -138,19 +138,73 @@ extract_allofus_pheprob_data <- function(concept_ids,
   cli::cli_progress_step("Expanding disease concepts and calculating relevant counts (S)...")
   
   if (expand_concepts) {
-    # Expand to descendants using concept_ancestor with IN clause
-    disease_cs <- dplyr::tbl(con, "concept_ancestor") %>%
+    # Debug: Let's see what we're working with
+    cli::cli_alert_info("Expanding {length(concept_ids)} seed concepts via concept_ancestor...")
+    
+    # Step 1: Get all descendants from concept_ancestor
+    descendants <- dplyr::tbl(con, "concept_ancestor") %>%
       dplyr::filter(ancestor_concept_id %in% !!as.integer(concept_ids)) %>%
-      dplyr::transmute(concept_id = descendant_concept_id) %>%
+      dplyr::select(descendant_concept_id) %>%
       dplyr::distinct()
     
-    # Include seed concepts themselves
-    seeds_self <- dplyr::tbl(con, "concept") %>%
+    # Debug: Count descendants
+    descendant_count <- descendants %>% dplyr::count() %>% dplyr::pull()
+    cli::cli_alert_info("Found {descendant_count} descendant concepts")
+    
+    # Step 2: Include seed concepts themselves  
+    seeds <- dplyr::tbl(con, "concept") %>%
       dplyr::filter(concept_id %in% !!as.integer(concept_ids)) %>%
-      dplyr::select(concept_id) %>%
+      dplyr::select(concept_id)
+    
+    # Step 3: Combine descendants + seeds, rename to common column name
+    disease_cs <- descendants %>%
+      dplyr::rename(concept_id = descendant_concept_id) %>%
+      dplyr::union_all(seeds) %>%
       dplyr::distinct()
     
-    disease_cs <- dplyr::union_all(disease_cs, seeds_self) %>% dplyr::distinct()
+    # Debug: Final count
+    final_count <- disease_cs %>% dplyr::count() %>% dplyr::pull()
+    cli::cli_alert_info("Total expanded concepts (descendants + seeds): {final_count}")
+    
+    if (final_count < length(concept_ids)) {
+      cli::cli_alert_warning("Expansion resulted in fewer concepts than input - this suggests a problem!")
+    }
+    
+    # If expansion gave us very few concepts, try alternative method
+    if (final_count < length(concept_ids) * 5) {  # Expect at least 5x expansion for good concepts
+      cli::cli_alert_warning("Very limited concept expansion detected. Trying alternative method...")
+      
+      # Alternative: Use concept_relationship table for "Maps to" relationships
+      alternative_concepts <- tryCatch({
+        dplyr::tbl(con, "concept_relationship") %>%
+          dplyr::filter(
+            concept_id_1 %in% !!as.integer(concept_ids),
+            relationship_id %in% c("Maps to", "Is a", "Subsumes")
+          ) %>%
+          dplyr::select(concept_id_2) %>%
+          dplyr::rename(concept_id = concept_id_2) %>%
+          dplyr::union_all(seeds) %>%
+          dplyr::distinct()
+      }, error = function(e) NULL)
+      
+      if (!is.null(alternative_concepts)) {
+        alt_count <- alternative_concepts %>% dplyr::count() %>% dplyr::pull()
+        cli::cli_alert_info("Alternative method found {alt_count} concepts")
+        
+        if (alt_count > final_count) {
+          disease_cs <- alternative_concepts
+          final_count <- alt_count
+          cli::cli_alert_success("Using alternative expansion method")
+        }
+      }
+      
+      # Last resort: warn but continue with just seed concepts
+      if (final_count <= length(concept_ids)) {
+        cli::cli_alert_warning("Concept expansion failed. Using only seed concepts: {length(concept_ids)}")
+        cli::cli_alert_info("This may result in very low disease prevalence")
+        disease_cs <- seeds
+      }
+    }
     
   } else {
     # Use only exact concept matches with IN clause
