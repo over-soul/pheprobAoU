@@ -1,0 +1,751 @@
+---
+title: "Phenotyping with pheprobAoU: A Comprehensive Guide"
+author: "pheprobAoU Development Team"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{Phenotyping with pheprobAoU: A Comprehensive Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE  # Set to FALSE for vignette building without All of Us connection
+)
+```
+
+# Introduction
+
+The `pheprobAoU` package provides a comprehensive toolkit for calculating PheProb (phenotype probabilities) using electronic health record (EHR) data from the All of Us Research Program. This vignette demonstrates real-world applications of the package for common phenotyping tasks.
+
+## What is PheProb?
+
+PheProb represents the likelihood that a participant exhibits a particular phenotype based on their clinical history recorded in EHR data. Unlike simple binary phenotype definitions, PheProb provides a probabilistic approach that:
+
+- Accounts for varying levels of clinical evidence
+- Incorporates temporal patterns in medical history
+- Handles missing or incomplete data gracefully
+- Provides graded phenotype assessments rather than binary classifications
+
+## Loading the Package
+
+```{r}
+library(pheprobAoU)
+library(dplyr)
+library(ggplot2)
+```
+
+# Basic Phenotyping Workflow
+
+## Step 1: Define Your Phenotype with OMOP Concepts
+
+The first step in any phenotyping analysis is to identify the relevant OMOP concept IDs that define your phenotype of interest. 
+
+```{r}
+# Example: Type 2 Diabetes Mellitus
+diabetes_concepts <- c(
+  201826,   # Type 2 diabetes mellitus
+  4329847,  # Diabetes mellitus
+  9201,     # Diabetic - non-insulin dependent
+  4193704   # Type II diabetes mellitus without complication
+)
+
+# Always validate your concept IDs first
+validation_result <- validate_concept_ids(diabetes_concepts)
+print(validation_result$summary)
+```
+
+## Step 2: Calculate PheProb Scores
+
+```{r}
+# Basic PheProb calculation
+diabetes_scores <- calculate_pheprob(
+  concept_ids = diabetes_concepts,
+  method = "composite",
+  progress = TRUE
+)
+
+# View the first few results
+head(diabetes_scores)
+```
+
+## Step 3: Analyze and Interpret Results
+
+```{r}
+# Summary statistics
+summary(diabetes_scores$pheprob_score)
+
+# Distribution of scores
+hist(diabetes_scores$pheprob_score, 
+     main = "Distribution of Diabetes PheProb Scores",
+     xlab = "PheProb Score",
+     ylab = "Frequency")
+
+# Identify high-probability cases
+high_prob_diabetes <- diabetes_scores[diabetes_scores$pheprob_score > 0.8, ]
+cat("Number of high-probability diabetes cases:", nrow(high_prob_diabetes))
+```
+
+# Advanced Phenotyping Examples
+
+## Multiple Phenotypes Analysis
+
+One of the key improvements in pheprobAoU is the ability to analyze multiple unrelated phenotypes simultaneously, avoiding the meaningless aggregation that occurs when mixing unrelated concept IDs.
+
+### The Problem with Mixed Concepts
+
+```{r}
+# DON'T DO THIS - mixing unrelated diseases
+mixed_concepts <- c(
+  201826,   # Type 2 diabetes
+  313217,   # Atrial fibrillation  
+  432870,   # Depression
+  4030518   # Chronic kidney disease
+)
+
+# The resulting pheprob_score would be meaningless
+# It's not the probability of any coherent phenotype!
+```
+
+### Solution: Multiple Phenotypes Mode
+
+```{r}
+# BETTER APPROACH - define separate phenotypes
+phenotypes <- list(
+  diabetes = c(201826, 4329847, 9201),
+  cardiovascular = c(314866, 313217, 316866, 4329847),
+  mental_health = c(4152280, 4226263, 436073),
+  kidney_disease = c(4030518, 192359, 4030319)
+)
+
+# Calculate separate probabilities for each phenotype
+multi_scores <- calculate_multiple_pheprobs(
+  phenotype_concepts = phenotypes,
+  method = "composite"
+)
+
+# View results - each phenotype gets its own meaningful probability
+head(multi_scores)
+```
+
+**Output:**
+```
+# A tibble: 6 × 5
+  person_id diabetes_prob cardiovascular_prob mental_health_prob kidney_disease_prob
+      <dbl>         <dbl>               <dbl>              <dbl>               <dbl>
+1    123456          0.89                0.45               0.12                0.23
+2    234567          0.23                0.91               0.67                0.08
+3    345678          0.67                0.34               0.89                0.45
+4    456789          0.12                0.78               0.23                0.91
+5    567890          0.95                0.67               0.34                0.12
+6    678901          0.34                0.23               0.78                0.56
+```
+
+### Custom Weights per Phenotype
+
+```{r}
+# Define different weights for each phenotype
+phenotype_weights <- list(
+  diabetes = c(
+    "201826" = 2.0,   # Type 2 DM - high weight
+    "4329847" = 1.5,  # General diabetes - medium weight
+    "9201" = 1.0      # NIDDM - baseline weight
+  ),
+  cardiovascular = c(
+    "314866" = 3.0,   # MI - highest weight
+    "313217" = 2.0,   # AFib - high weight
+    "316866" = 1.5,   # HTN - lower weight (common)
+    "4329847" = 2.5   # Heart disease - high weight
+  ),
+  mental_health = c(
+    "4152280" = 2.5,  # Major depression - high weight
+    "4226263" = 2.0,  # Anxiety - medium weight
+    "436073" = 3.0    # Bipolar - highest weight (severity)
+  )
+)
+
+weighted_multi_scores <- calculate_multiple_pheprobs(
+  phenotype_concepts = phenotypes,
+  method = "weighted",
+  phenotype_weights = phenotype_weights,
+  normalization = "minmax"
+)
+```
+
+### Phenotype Coherence Validation
+
+The package includes validation to warn about potentially incoherent concept groupings:
+
+```{r}
+# Validate phenotype coherence
+validation_result <- validate_phenotype_coherence(phenotypes)
+
+# Check for warnings
+if (!validation_result$validation_passed) {
+  print("Warnings found:")
+  print(validation_result$overall_warnings)
+}
+
+# View summary
+print(validation_result$summary)
+```
+
+**Output:**
+```
+  phenotype_name n_concepts n_valid_concepts n_warnings
+1       diabetes          3                3          0
+2 cardiovascular          4                4          1
+3  mental_health          3                3          0
+4 kidney_disease          3                3          0
+```
+
+### Long Format Output
+
+```{r}
+# Get results in long format for analysis
+long_scores <- calculate_multiple_pheprobs(
+  phenotype_concepts = phenotypes,
+  method = "composite",
+  output_format = "long"
+)
+
+head(long_scores)
+```
+
+**Output:**
+```
+# A tibble: 6 × 3
+  person_id phenotype_name  pheprob_score
+      <dbl> <chr>                   <dbl>
+1    123456 diabetes                 0.89
+2    123456 cardiovascular           0.45
+3    123456 mental_health            0.12
+4    123456 kidney_disease           0.23
+5    234567 diabetes                 0.23
+6    234567 cardiovascular           0.91
+```
+
+### Comorbidity Analysis with Multiple Phenotypes
+
+```{r}
+# Analyze comorbidity patterns
+comorbidity_analysis <- multi_scores %>%
+  # Define high-probability thresholds
+  mutate(
+    high_diabetes = diabetes_prob > 0.8,
+    high_cvd = cardiovascular_prob > 0.8,
+    high_mental = mental_health_prob > 0.8,
+    high_kidney = kidney_disease_prob > 0.8
+  ) %>%
+  # Count comorbidity combinations
+  summarise(
+    diabetes_only = sum(high_diabetes & !high_cvd & !high_mental & !high_kidney),
+    cvd_only = sum(!high_diabetes & high_cvd & !high_mental & !high_kidney),
+    diabetes_cvd = sum(high_diabetes & high_cvd & !high_mental & !high_kidney),
+    diabetes_mental = sum(high_diabetes & !high_cvd & high_mental & !high_kidney),
+    triple_comorbid = sum(high_diabetes & high_cvd & high_mental & !high_kidney),
+    .groups = "drop"
+  )
+
+print(comorbidity_analysis)
+```
+
+### Population Stratification
+
+```{r}
+# Create risk strata based on multiple phenotypes
+risk_strata <- multi_scores %>%
+  mutate(
+    # Define overall health risk categories
+    health_risk = case_when(
+      diabetes_prob > 0.8 | cardiovascular_prob > 0.8 ~ "High Risk",
+      diabetes_prob > 0.5 | cardiovascular_prob > 0.5 ~ "Moderate Risk", 
+      mental_health_prob > 0.8 | kidney_disease_prob > 0.8 ~ "Specialized Care",
+      TRUE ~ "Low Risk"
+    ),
+    
+    # Count number of high-probability conditions
+    n_conditions = (diabetes_prob > 0.8) + (cardiovascular_prob > 0.8) + 
+                   (mental_health_prob > 0.8) + (kidney_disease_prob > 0.8)
+  )
+
+# Summary by risk category
+risk_summary <- risk_strata %>%
+  count(health_risk, n_conditions) %>%
+  arrange(desc(n))
+
+print(risk_summary)
+```
+
+## Cardiovascular Disease Risk Assessment
+
+Cardiovascular disease (CVD) is a complex phenotype that benefits from a multi-faceted approach combining various clinical indicators.
+
+```{r}
+# Define comprehensive CVD concept set
+cvd_concepts <- c(
+  # Coronary Heart Disease
+  314866,   # Myocardial infarction
+  437894,   # Chronic ischemic heart disease
+  4329847,  # Heart disease
+  
+  # Heart Failure
+  4229440,  # Chronic systolic heart failure
+  4185711,  # Chronic diastolic heart failure
+  316139,   # Heart failure
+  
+  # Arrhythmias
+  313217,   # Atrial fibrillation
+  4108832,  # Cardiac arrhythmia
+  
+  # Cerebrovascular Disease
+  381591,   # Cerebral infarction
+  4043731,  # Cerebrovascular disease
+  
+  # Peripheral Vascular Disease
+  321052,   # Peripheral vascular disease
+  
+  # Hypertension
+  316866,   # Hypertensive disorder
+  
+  # Procedures
+  4336464,  # Coronary artery bypass graft
+  4201590,  # Percutaneous coronary intervention
+  2617477   # Cardiac catheterization
+)
+
+# Calculate CVD risk scores with custom weights
+cvd_weights <- c(
+  "314866" = 3.0,   # MI - highest weight
+  "437894" = 2.5,   # Chronic CHD
+  "316139" = 2.5,   # Heart failure
+  "381591" = 3.0,   # Stroke - highest weight
+  "313217" = 2.0,   # Atrial fibrillation
+  "316866" = 1.5,   # Hypertension - lower weight (common)
+  "4336464" = 2.8,  # CABG - major procedure
+  "4201590" = 2.3   # PCI - intervention
+)
+
+cvd_scores <- calculate_pheprob(
+  concept_ids = cvd_concepts,
+  method = "weighted",
+  weights = cvd_weights,
+  domains = c("condition", "procedure"),
+  normalization = "minmax",
+  output_format = "wide"
+)
+
+# Analyze CVD risk distribution
+cvd_scores$risk_category <- cut(
+  cvd_scores$pheprob_score,
+  breaks = c(0, 0.3, 0.6, 0.8, 1.0),
+  labels = c("Low", "Moderate", "High", "Very High"),
+  include.lowest = TRUE
+)
+
+table(cvd_scores$risk_category)
+```
+
+## Mental Health Phenotyping
+
+Mental health conditions often require temporal considerations, as recent episodes may be more clinically relevant.
+
+```{r}
+# Depression and anxiety concepts
+mental_health_concepts <- c(
+  # Depression
+  4152280,  # Major depressive disorder
+  440383,   # Major depressive disorder, single episode
+  436665,   # Major depressive disorder, recurrent
+  
+  # Anxiety Disorders
+  4226263,  # Anxiety disorder
+  4183555,  # Generalized anxiety disorder
+  197831,   # Panic disorder
+  
+  # Bipolar Disorder
+  436073,   # Bipolar disorder
+  4012083,  # Bipolar I disorder
+  
+  # PTSD
+  4059317,  # Posttraumatic stress disorder
+  
+  # Substance Use
+  4268261,  # Alcohol use disorder
+  437264    # Drug abuse
+)
+
+# Focus on recent episodes (last 3 years)
+recent_date_range <- list(
+  start = as.Date("2021-01-01"),
+  end = Sys.Date()
+)
+
+# Use temporal scoring to emphasize recent events
+mental_health_scores <- calculate_pheprob(
+  concept_ids = mental_health_concepts,
+  method = "temporal",
+  date_range = recent_date_range,
+  domains = c("condition", "procedure", "observation"),
+  normalization = "zscore"
+)
+
+# Create severity categories
+mental_health_scores$severity <- case_when(
+  mental_health_scores$pheprob_score < -1 ~ "Minimal",
+  mental_health_scores$pheprob_score < 0 ~ "Mild",
+  mental_health_scores$pheprob_score < 1 ~ "Moderate",
+  TRUE ~ "Severe"
+)
+
+table(mental_health_scores$severity)
+```
+
+## Multi-Domain Chronic Disease Assessment
+
+For complex chronic diseases, it's often valuable to examine evidence across multiple clinical domains.
+
+```{r}
+# Chronic Kidney Disease - multi-domain approach
+ckd_concepts <- c(
+  # Conditions
+  4030518,  # Chronic kidney disease
+  192359,   # Chronic renal failure
+  4030319,  # Chronic kidney disease stage 3
+  4030320,  # Chronic kidney disease stage 4
+  4030321,  # Chronic kidney disease stage 5
+  
+  # Procedures
+  4322025,  # Hemodialysis
+  4152675,  # Peritoneal dialysis
+  4051717,  # Kidney transplant
+  
+  # Laboratory values (measurements)
+  3016723,  # Creatinine
+  3020564,  # eGFR
+  
+  # Medications
+  1308216,  # ACE inhibitor
+  1307863   # ARB
+)
+
+# Extract features to examine domain-specific patterns
+ckd_features <- extract_ehr_features(
+  concept_ids = ckd_concepts,
+  domains = c("condition", "procedure", "measurement", "drug")
+)
+
+# Calculate scores by domain
+ckd_scores_by_domain <- ckd_features %>%
+  group_by(person_id, domain_id) %>%
+  summarise(
+    concept_count = n_distinct(concept_id),
+    total_records = sum(total_records),
+    avg_frequency = mean(occurrence_count),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = domain_id,
+    values_from = c(concept_count, total_records, avg_frequency),
+    values_fill = 0
+  )
+
+# Overall CKD probability
+ckd_scores <- calculate_pheprob(
+  concept_ids = ckd_concepts,
+  method = "composite",
+  domains = c("condition", "procedure", "measurement"),
+  output_format = "wide"
+)
+```
+
+# Validation and Quality Assessment
+
+## Cross-Validation with Known Outcomes
+
+When available, validate your PheProb scores against known clinical outcomes.
+
+```{r}
+# Assuming you have a validation dataset with known diabetes status
+# validation_data <- read.csv("diabetes_validation.csv")
+
+# Calculate correlation between PheProb scores and known outcomes
+# correlation <- cor(diabetes_scores$pheprob_score, validation_data$diabetes_status)
+# cat("Correlation with known outcomes:", round(correlation, 3))
+
+# ROC analysis
+# library(pROC)
+# roc_result <- roc(validation_data$diabetes_status, diabetes_scores$pheprob_score)
+# plot(roc_result, main = "ROC Curve for Diabetes PheProb")
+# cat("AUC:", round(auc(roc_result), 3))
+```
+
+## Sensitivity Analysis
+
+Test the robustness of your results by varying key parameters.
+
+```{r}
+# Compare different scoring methods
+methods_comparison <- list()
+
+for (method in c("simple", "weighted", "temporal", "composite")) {
+  scores <- calculate_pheprob(
+    concept_ids = diabetes_concepts,
+    method = method,
+    progress = FALSE
+  )
+  
+  methods_comparison[[method]] <- data.frame(
+    method = method,
+    mean_score = mean(scores$pheprob_score),
+    median_score = median(scores$pheprob_score),
+    sd_score = sd(scores$pheprob_score),
+    high_prob_count = sum(scores$pheprob_score > 0.8)
+  )
+}
+
+comparison_df <- do.call(rbind, methods_comparison)
+print(comparison_df)
+```
+
+## Temporal Stability
+
+Assess how PheProb scores change when using different time windows.
+
+```{r}
+# Define different time windows
+time_windows <- list(
+  "recent_1yr" = list(start = as.Date("2023-01-01"), end = Sys.Date()),
+  "recent_3yr" = list(start = as.Date("2021-01-01"), end = Sys.Date()),
+  "recent_5yr" = list(start = as.Date("2019-01-01"), end = Sys.Date()),
+  "all_time" = NULL
+)
+
+temporal_stability <- list()
+
+for (window_name in names(time_windows)) {
+  scores <- calculate_pheprob(
+    concept_ids = diabetes_concepts,
+    date_range = time_windows[[window_name]],
+    method = "composite",
+    progress = FALSE
+  )
+  
+  temporal_stability[[window_name]] <- scores %>%
+    select(person_id, pheprob_score) %>%
+    rename(!!paste0("score_", window_name) := pheprob_score)
+}
+
+# Combine results for comparison
+stability_df <- Reduce(function(x, y) merge(x, y, by = "person_id", all = TRUE), 
+                      temporal_stability)
+
+# Calculate correlations between time windows
+cor_matrix <- cor(stability_df[, -1], use = "complete.obs")
+print(round(cor_matrix, 3))
+```
+
+# Advanced Applications
+
+## Comorbidity Network Analysis
+
+Use PheProb scores to identify disease clusters and comorbidity patterns.
+
+```{r}
+# Define multiple disease phenotypes
+disease_concepts <- list(
+  diabetes = c(201826, 4329847, 9201),
+  hypertension = c(316866, 4268046),
+  heart_disease = c(314866, 437894, 4329847),
+  kidney_disease = c(4030518, 192359),
+  depression = c(4152280, 440383)
+)
+
+# Calculate PheProb for each disease
+disease_scores <- list()
+
+for (disease in names(disease_concepts)) {
+  scores <- calculate_pheprob(
+    concept_ids = disease_concepts[[disease]],
+    method = "composite",
+    progress = FALSE
+  )
+  
+  disease_scores[[disease]] <- scores %>%
+    select(person_id, pheprob_score) %>%
+    rename(!!paste0(disease, "_prob") := pheprob_score)
+}
+
+# Combine all disease probabilities
+comorbidity_df <- Reduce(function(x, y) merge(x, y, by = "person_id", all = TRUE), 
+                        disease_scores)
+
+# Calculate comorbidity correlations
+disease_cor <- cor(comorbidity_df[, -1], use = "complete.obs")
+
+# Visualize comorbidity network
+# library(corrplot)
+# corrplot(disease_cor, method = "circle", type = "upper",
+#          title = "Disease Comorbidity Network")
+```
+
+## Population Stratification
+
+Use PheProb scores to stratify populations for clinical research.
+
+```{r}
+# Create diabetes severity strata
+diabetes_strata <- diabetes_scores %>%
+  mutate(
+    diabetes_stratum = case_when(
+      pheprob_score < 0.2 ~ "Unlikely",
+      pheprob_score < 0.5 ~ "Possible", 
+      pheprob_score < 0.8 ~ "Probable",
+      TRUE ~ "Definite"
+    )
+  ) %>%
+  count(diabetes_stratum) %>%
+  mutate(percentage = round(n / sum(n) * 100, 1))
+
+print(diabetes_strata)
+
+# Stratified sampling for cohort studies
+set.seed(123)
+stratified_sample <- diabetes_scores %>%
+  mutate(
+    diabetes_stratum = case_when(
+      pheprob_score < 0.2 ~ "Unlikely",
+      pheprob_score < 0.5 ~ "Possible", 
+      pheprob_score < 0.8 ~ "Probable",
+      TRUE ~ "Definite"
+    )
+  ) %>%
+  group_by(diabetes_stratum) %>%
+  slice_sample(n = min(100, n())) %>%  # Sample up to 100 from each stratum
+  ungroup()
+
+cat("Stratified sample size:", nrow(stratified_sample))
+table(stratified_sample$diabetes_stratum)
+```
+
+# Best Practices and Recommendations
+
+## Concept Selection Guidelines
+
+1. **Start with validated concept sets** when available
+2. **Include hierarchical concepts** (general and specific)
+3. **Consider different clinical contexts** (inpatient vs outpatient)
+4. **Validate concepts with clinical experts**
+
+```{r}
+# Example: Hierarchical diabetes concept selection
+diabetes_hierarchy <- list(
+  # Most specific
+  specific = c(201826, 4193704, 443238),  # Type 2 DM with/without complications
+  
+  # Moderately specific  
+  moderate = c(4329847, 9201),            # Diabetes mellitus, NIDDM
+  
+  # General/broad
+  general = c(73211, 4311629)             # Diabetes-related concepts
+)
+
+# Weight concepts by specificity
+hierarchy_weights <- c(
+  # Specific concepts get highest weight
+  rep(3.0, length(diabetes_hierarchy$specific)),
+  # Moderate concepts get medium weight
+  rep(2.0, length(diabetes_hierarchy$moderate)),
+  # General concepts get lower weight
+  rep(1.0, length(diabetes_hierarchy$general))
+)
+
+names(hierarchy_weights) <- c(
+  diabetes_hierarchy$specific,
+  diabetes_hierarchy$moderate,
+  diabetes_hierarchy$general
+)
+
+all_diabetes_concepts <- unlist(diabetes_hierarchy)
+
+weighted_diabetes_scores <- calculate_pheprob(
+  concept_ids = all_diabetes_concepts,
+  weights = hierarchy_weights,
+  method = "weighted"
+)
+```
+
+## Quality Control Checks
+
+Always perform quality control checks on your phenotyping results.
+
+```{r}
+# 1. Check for reasonable score distributions
+score_summary <- summary(diabetes_scores$pheprob_score)
+cat("Score range:", range(diabetes_scores$pheprob_score))
+cat("Scores at extremes (0 or 1):", 
+    sum(diabetes_scores$pheprob_score %in% c(0, 1)))
+
+# 2. Examine outliers
+outliers <- diabetes_scores[
+  diabetes_scores$pheprob_score > quantile(diabetes_scores$pheprob_score, 0.99) |
+  diabetes_scores$pheprob_score < quantile(diabetes_scores$pheprob_score, 0.01),
+]
+cat("Number of potential outliers:", nrow(outliers))
+
+# 3. Check for missing data patterns
+missing_summary <- diabetes_scores %>%
+  summarise(
+    total_persons = n(),
+    missing_scores = sum(is.na(pheprob_score)),
+    zero_scores = sum(pheprob_score == 0, na.rm = TRUE)
+  )
+print(missing_summary)
+```
+
+## Documentation and Reproducibility
+
+```{r}
+# Save analysis parameters for reproducibility
+analysis_metadata <- list(
+  concept_ids = diabetes_concepts,
+  method = "composite",
+  normalization = "minmax",
+  date_range = NULL,
+  domains = c("condition", "procedure", "drug", "measurement", "observation"),
+  analysis_date = Sys.Date(),
+  package_version = packageVersion("pheprobAoU"),
+  n_persons = nrow(diabetes_scores),
+  score_range = range(diabetes_scores$pheprob_score)
+)
+
+# Save with results
+saveRDS(
+  list(scores = diabetes_scores, metadata = analysis_metadata),
+  "diabetes_pheprob_analysis.rds"
+)
+```
+
+# Conclusion
+
+The `pheprobAoU` package provides a flexible and comprehensive framework for phenotyping using All of Us EHR data. Key takeaways:
+
+1. **Start simple** with basic binary scoring, then explore more sophisticated methods
+2. **Validate your concept sets** with clinical experts and existing literature
+3. **Consider temporal patterns** especially for dynamic conditions
+4. **Perform sensitivity analyses** to ensure robust results
+5. **Document your analysis** thoroughly for reproducibility
+
+For more complex phenotyping tasks, consider combining PheProb scores with other clinical variables and machine learning approaches to create even more sophisticated phenotype definitions.
+
+## Session Information
+
+```{r}
+sessionInfo()
+```
