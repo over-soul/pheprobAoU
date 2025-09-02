@@ -160,6 +160,22 @@ validate_person_ids <- function(person_ids) {
   original_length <- length(person_ids)
   person_ids <- unique(person_ids[!is.na(person_ids)])
   
+  # If all person_ids were NA or duplicates, treat as NULL
+  if (length(person_ids) == 0) {
+    return(list(
+      valid = logical(0),
+      invalid_ids = numeric(0),
+      missing_ids = numeric(0),
+      summary = list(
+        total_submitted = original_length,
+        valid_person_ids = 0,
+        missing_from_database = 0,
+        validation_rate = 0
+      ),
+      validated_person_ids = NULL
+    ))
+  }
+  
   if (length(person_ids) < original_length) {
     cli::cli_alert_info("Removed duplicates and NA values from person_ids")
   }
