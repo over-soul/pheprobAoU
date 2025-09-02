@@ -143,7 +143,7 @@ validate_person_ids <- function(person_ids) {
         valid_person_ids = 0,
         validation_rate = 100
       ),
-      validated_person_ids = numeric(0)
+      validated_person_ids = NULL
     ))
   }
   

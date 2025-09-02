@@ -83,6 +83,11 @@ extract_total_healthcare_utilization <- function(person_ids = NULL,
                                                exclude_concepts = NULL,
                                                max_persons = NULL) {
   
+  # Handle empty numeric vectors as NULL (from validation functions)
+  if (!is.null(person_ids) && length(person_ids) == 0) {
+    person_ids <- NULL
+  }
+  
   # Validate inputs
   if (!is.null(person_ids) && (!is.numeric(person_ids) || length(person_ids) == 0)) {
     cli::cli_abort("person_ids must be a non-empty numeric vector or NULL")
