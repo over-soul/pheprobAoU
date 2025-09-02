@@ -45,14 +45,23 @@ extract_allofus_pheprob_data <- function(concept_ids,
     cli::cli_abort("concept_ids must be a non-empty numeric vector")
   }
   
-  if (!is_aou_connected()) {
-    cli::cli_abort("Not connected to All of Us. Run connect_aou() first.")
+  # Ensure allofus package is available
+  if (!requireNamespace("allofus", quietly = TRUE)) {
+    cli::cli_abort("allofus package is required but not available")
   }
   
   cli::cli_alert_info("Extracting AllofUs data for {length(concept_ids)} disease-relevant concepts")
   
-  # Get connection
-  con <- allofus::aou_connect()
+  # Get connection - this function is only called when we're already in All of Us environment
+  con <- tryCatch({
+    connection <- allofus::aou_connect()
+    if (is.null(connection)) {
+      stop("Connection returned NULL")
+    }
+    connection
+  }, error = function(e) {
+    cli::cli_abort("Failed to connect to All of Us database: {e$message}")
+  })
   
   # Define domain column mappings
   domain_cols <- list(

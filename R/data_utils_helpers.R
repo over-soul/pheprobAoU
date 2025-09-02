@@ -89,11 +89,18 @@ extract_domain_total_counts <- function(table_name,
 #' }
 #' }
 is_aou_connected <- function() {
+  # Simplified connection check - always return TRUE or FALSE, never NA
   tryCatch({
     if (requireNamespace("allofus", quietly = TRUE)) {
-      # Test connection with a simple query
-      result <- allofus::aou_sql("SELECT 1 LIMIT 1")
-      return(nrow(result) > 0)
+      # Just check if we can get a connection object
+      con <- allofus::aou_connect()
+      
+      # Explicitly handle all possible values
+      if (is.null(con) || is.na(con)) {
+        return(FALSE)
+      } else {
+        return(TRUE)
+      }
     }
     return(FALSE)
   }, error = function(e) {
@@ -144,13 +151,8 @@ connect_aou <- function(verbose = TRUE) {
     return(FALSE)
   }
   
-  # Check if already connected
-  if (is_aou_connected()) {
-    if (verbose) {
-      cli::cli_alert_success("Already connected to All of Us Research Program")
-    }
-    return(TRUE)
-  }
+  # In All of Us environment, connection should work automatically
+  # Skip the expensive connection check
   
   # Attempt connection
   if (verbose) {
@@ -160,18 +162,10 @@ connect_aou <- function(verbose = TRUE) {
   tryCatch({
     allofus::aou_connect()
     
-    # Verify connection
-    if (is_aou_connected()) {
-      if (verbose) {
-        cli::cli_alert_success("Successfully connected to All of Us Research Program")
-      }
-      return(TRUE)
-    } else {
-      if (verbose) {
-        cli::cli_alert_warning("Connection attempted but verification failed")
-      }
-      return(FALSE)
+    if (verbose) {
+      cli::cli_alert_success("Connected to All of Us Research Program")
     }
+    return(TRUE)
     
   }, error = function(e) {
     if (verbose) {
