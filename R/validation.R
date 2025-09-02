@@ -209,12 +209,18 @@ validate_person_ids <- function(person_ids) {
     validation_rate = round(n_valid / length(person_ids) * 100, 2)
   )
   
+  # Return NULL if no valid person IDs found, otherwise return the valid ones
+  valid_person_ids <- person_ids[valid_existence]
+  if (length(valid_person_ids) == 0) {
+    valid_person_ids <- NULL
+  }
+  
   return(list(
     valid = valid_existence,
     invalid_ids = numeric(0),  # No format validation for person IDs
     missing_ids = missing_ids,
     summary = summary_stats,
-    validated_person_ids = person_ids[valid_existence]
+    validated_person_ids = valid_person_ids
   ))
 }
 
