@@ -446,32 +446,47 @@ analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains
     # In a real implementation, this would query the concept table to get domains
     # For now, we'll create a simple analysis structure
     
-    # Simulate domain analysis (in real implementation, would query database)
+    # Query the concept table to get actual domain information
     tryCatch({
-      # This would be: SELECT concept_id, domain_id FROM concept WHERE concept_id IN (...)
-      # For now, simulate with basic validation
+      # Query All of Us concept table to get domain information for concepts
+      concept_ids_str <- paste(concept_ids, collapse = ", ")
+      domain_query <- glue::glue("
+        SELECT concept_id, domain_id, concept_name
+        FROM concept 
+        WHERE concept_id IN ({concept_ids_str})
+      ")
       
-      n_concepts <- length(concept_ids)
-      estimated_domains <- min(max_domains_per_phenotype, max(1, ceiling(n_concepts / 5)))
+      concept_info <- allofus::aou_sql(domain_query)
       
-      domain_analysis[[phenotype_name]] <- list(
-        n_concepts = n_concepts,
-        estimated_domains = estimated_domains,
-        coherence_score = max(0, 1 - (estimated_domains - 1) * 0.2)  # Simple scoring
-      )
-      
-      # Warn if too many estimated domains
-      if (estimated_domains > max_domains_per_phenotype) {
+      if (nrow(concept_info) > 0) {
+        n_concepts <- nrow(concept_info)
+        unique_domains <- length(unique(concept_info$domain_id))
+        
+        # Calculate coherence score based on domain consistency
+        coherence_score <- 1 - min(0.8, (unique_domains - 1) * 0.2)
+        
+        domain_analysis[[phenotype_name]] <- list(
+          n_concepts = n_concepts,
+          unique_domains = unique_domains,
+          domain_breakdown = table(concept_info$domain_id),
+          coherence_score = coherence_score,
+          concept_details = concept_info
+        )
+        
+        # Warn if too many domains
+        if (unique_domains > max_domains_per_phenotype) {
         warnings <- c(warnings, 
-                     glue::glue("Phenotype '{phenotype_name}' may span too many domains ({estimated_domains} > {max_domains_per_phenotype})"))
+                     glue::glue("Phenotype '{phenotype_name}' may span too many domains ({unique_domains} > {max_domains_per_phenotype})"))
       }
       
     }, error = function(e) {
       cli::cli_alert_info("Could not analyze domain coherence for '{phenotype_name}': {e$message}")
       domain_analysis[[phenotype_name]] <- list(
         n_concepts = length(concept_ids),
-        estimated_domains = NA,
-        coherence_score = NA
+        unique_domains = NA,
+        domain_breakdown = NA,
+        coherence_score = NA,
+        concept_details = NULL
       )
     })
   }

@@ -191,31 +191,35 @@ create_total_count_query <- function(table_name, person_ids, date_range, exclude
 #' @keywords internal
 execute_total_count_query <- function(query, max_persons = NULL) {
   
-  # In real implementation, this would use the allofus package
-  # For now, simulate database query execution
-  
+  # Execute query using All of Us database connection
   tryCatch({
     
-    # Simulated database connection and query execution
-    # In real code: result <- allofus::bq_table_download(bq_dataset_query(query))
+    # Execute the SQL query using allofus package
+    result <- allofus::aou_sql(query)
     
-    # For demonstration, create simulated data
-    if (is.null(max_persons)) max_persons <- 1000
-    
-    n_persons <- min(max_persons, 1000)
-    
-    # Simulate realistic data
-    simulated_result <- tibble::tibble(
-      person_id = seq_len(n_persons),
-      total_count = rpois(n_persons, lambda = 25) + 1,  # Poisson distribution for code counts
-      first_occurrence = as.Date("2018-01-01") + sample(0:365, n_persons, replace = TRUE),
-      last_occurrence = as.Date("2023-01-01") + sample(0:365, n_persons, replace = TRUE)
-    )
-    
-    # Ensure last >= first
-    simulated_result$last_occurrence <- pmax(simulated_result$first_occurrence, simulated_result$last_occurrence)
-    
-    return(simulated_result)
+    if (nrow(result) > 0) {
+      # Convert date columns to proper Date type
+      result$first_occurrence <- as.Date(result$first_occurrence)
+      result$last_occurrence <- as.Date(result$last_occurrence)
+      
+      # Apply max_persons limit if specified (for testing/development)
+      if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0) {
+        if (nrow(result) > max_persons) {
+          result <- result[1:max_persons, ]
+          cli::cli_alert_info("Limited results to {max_persons} persons for testing")
+        }
+      }
+      
+      return(tibble::as_tibble(result))
+    } else {
+      cli::cli_alert_warning("No healthcare utilization data found")
+      return(tibble::tibble(
+        person_id = integer(0),
+        total_count = integer(0),
+        first_occurrence = as.Date(character(0)),
+        last_occurrence = as.Date(character(0))
+      ))
+    }
     
   }, error = function(e) {
     cli::cli_alert_warning("Database query failed: {e$message}")
