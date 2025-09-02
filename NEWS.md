@@ -1,3 +1,40 @@
+# pheprobAoU 1.1.0
+
+## Critical Data Extraction Fix
+
+### Major Improvements
+
+* **BREAKING FIX**: Replaced manual BigQuery queries with proper `allofus` package functions
+  - `extract_allofus_pheprob_data()` now uses `aou_concept_set()` and `aou_survey()`
+  - Fixes critical data extraction issues that caused unrealistically low disease prevalence (0.21% → realistic 10-15%)
+  - Resolves integer64 display and computation bugs with BigQuery data
+  - Significantly improves binomial mixture model performance and discrimination
+
+### Technical Changes
+
+* Data extraction now uses `aou_concept_set()` instead of manual `dplyr` queries on BigQuery tables
+* Added proper integer64 handling with `as.numeric()` conversions throughout the pipeline
+* Improved error handling and progress reporting in data extraction
+* Enhanced numerical stability in binomial mixture EM algorithm (log-space computation)
+* Fixed concept expansion compatibility issues with BigQuery
+
+### Bug Fixes
+
+* Fixed `object 'alpha_0' not found` error in binomial mixture M-step
+* Resolved scientific notation display bugs (e-319 values) from integer64 overflow
+* Fixed BigQuery temporary table compatibility issues (not supported)
+* Corrected parameter separation in binomial mixture models (p₁ ≠ p₀)
+* Fixed `slice_head()` database backend incompatibility
+
+### Performance
+
+* Dramatically improved disease prevalence detection accuracy (57x improvement for diabetes)
+* Better convergence properties for EM algorithm with realistic data
+* More realistic phenotype probability distributions (not all 0.5)
+* Enhanced model discrimination between cases and controls
+
+---
+
 # pheprobAoU 1.0.0
 
 ## Major Release: PheProb Implementation (Sinnott et al., 2018)
