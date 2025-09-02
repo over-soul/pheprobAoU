@@ -138,39 +138,26 @@ extract_allofus_pheprob_data <- function(concept_ids,
   cli::cli_progress_step("Expanding disease concepts and calculating relevant counts (S)...")
   
   if (expand_concepts) {
-    # Create temporary table with seed concepts
-    tmp_seed_name <- paste0("tmp_seed_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sample(1e6L, 1))
-    seed_tbl_ref <- dplyr::copy_to(
-      con,
-      tibble::tibble(ancestor_concept_id = as.integer(concept_ids)),
-      name = tmp_seed_name,
-      temporary = TRUE,
-      overwrite = TRUE
-    )
-    
-    # Expand to descendants using concept_ancestor
+    # Expand to descendants using concept_ancestor with IN clause
     disease_cs <- dplyr::tbl(con, "concept_ancestor") %>%
-      dplyr::inner_join(seed_tbl_ref, by = "ancestor_concept_id") %>%
+      dplyr::filter(ancestor_concept_id %in% !!as.integer(concept_ids)) %>%
       dplyr::transmute(concept_id = descendant_concept_id) %>%
       dplyr::distinct()
     
     # Include seed concepts themselves
-    seeds_self <- seed_tbl_ref %>%
-      dplyr::transmute(concept_id = ancestor_concept_id) %>%
+    seeds_self <- dplyr::tbl(con, "concept") %>%
+      dplyr::filter(concept_id %in% !!as.integer(concept_ids)) %>%
+      dplyr::select(concept_id) %>%
       dplyr::distinct()
     
     disease_cs <- dplyr::union_all(disease_cs, seeds_self) %>% dplyr::distinct()
     
   } else {
-    # Use only exact concept matches
-    tmp_concepts_name <- paste0("tmp_concepts_", sample(1e6L, 1))
-    disease_cs <- dplyr::copy_to(
-      con,
-      tibble::tibble(concept_id = as.integer(concept_ids)),
-      name = tmp_concepts_name,
-      temporary = TRUE,
-      overwrite = TRUE
-    )
+    # Use only exact concept matches with IN clause
+    disease_cs <- dplyr::tbl(con, "concept") %>%
+      dplyr::filter(concept_id %in% !!as.integer(concept_ids)) %>%
+      dplyr::select(concept_id) %>%
+      dplyr::distinct()
   }
   
   # Calculate disease-relevant counts (S)
@@ -183,14 +170,9 @@ extract_allofus_pheprob_data <- function(concept_ids,
   
   # Start with person table or create person list from events
   if (!is.null(person_ids) && length(person_ids) > 0) {
-    tmp_persons_name <- paste0("tmp_persons_", sample(1e6L, 1))
-    person_base <- dplyr::copy_to(
-      con,
-      tibble::tibble(person_id = as.integer(person_ids)),
-      name = tmp_persons_name,
-      temporary = TRUE,
-      overwrite = TRUE
-    )
+    person_base <- dplyr::tbl(con, "person") %>%
+      dplyr::filter(person_id %in% !!as.integer(person_ids)) %>%
+      dplyr::select(person_id)
   } else {
     person_base <- dplyr::tbl(con, "person") %>%
       dplyr::select(person_id)
