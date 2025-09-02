@@ -3,7 +3,7 @@ Type: Package
 Title: Calculate PheProb (Phenotype Probabilities) Using All of Us EHR Data
 Version: 1.0.0
 Authors@R: 
-    person("Alireza Ehteshami", "alireza.ehteshami@emory.edu", role = c("aut", "cre"),
+    person("Alireza", "Ehteshami", email = "alireza.ehteshami@emory.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0001-9637-1695"))
 Description: Implements the PheProb methodology (Sinnott et al., 2018) using binomial 
     mixture models for probabilistic phenotyping with electronic health record (EHR) 

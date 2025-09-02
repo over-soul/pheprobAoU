@@ -1,9 +1,5 @@
 # pheprobAoU: PheProb Implementation for All of Us EHR Data
 
-[![R-CMD-check](https://github.com/over-soul/pheprobAoU/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/over-soul/pheprobAoU/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/over-soul/pheprobAoU/branch/main/graph/badge.svg)](https://app.codecov.io/gh/over-soul/pheprobAoU?branch=main)
-[![CRAN status](https://www.r-pkg.org/badges/version/pheprobAoU)](https://CRAN.R-project.org/package=pheprobAoU)
-
 ## Overview
 
 `pheprobAoU` implements the **PheProb methodology** (Sinnott et al., 2018) using binomial mixture models for probabilistic phenotyping with electronic health record (EHR) data from the All of Us Research Program. 
