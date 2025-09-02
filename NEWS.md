@@ -1,71 +1,139 @@
+# pheprobAoU 1.0.0
+
+## Major Release: PheProb Implementation (Sinnott et al., 2018)
+
+This major release implements the **PheProb methodology** (Sinnott et al., 2018) using binomial mixture models, replacing the previous deterministic scoring approaches with proper probabilistic phenotyping.
+
+### Breaking Changes
+
+* **Default method changed** from `"composite"` to `"original"` in `calculate_pheprob()`
+* **Deprecated deterministic methods**: `"simple"`, `"weighted"`, `"temporal"`, `"composite"` are now deprecated with warnings
+* **New output format**: Results now include true phenotype probabilities P(Y=1|S,C) with model diagnostics
+
+### New Features: PheProb Implementation (Sinnott et al., 2018)
+
+* **`method = "original"`**: Implements the PheProb binomial mixture model (Sinnott et al., 2018)
+  - Models disease-relevant codes (S) as subset of total healthcare utilization (C)
+  - Uses EM algorithm to estimate parameters: p₁, p₀, α₀, α₁
+  - Healthcare utilization adjustment: φ(c) = logistic(α₀ + α₁ × c)
+  - Returns true phenotype probabilities P(Y=1|S,C)
+
+* **Binomial mixture model core** (`R/binomial_mixture.R`):
+  - `fit_pheprob_binomial_mixture()`: Complete EM algorithm implementation
+  - Robust numerical implementation with convergence diagnostics
+  - Parameter initialization strategies (random, k-means, manual)
+  - Comprehensive model validation and quality assessment
+
+* **Enhanced data extraction** (`R/data_utils_helpers.R`):
+  - `extract_total_healthcare_utilization()`: Extract total billing code counts (C)
+  - `prepare_pheprob_binomial_data()`: Create (S,C) pairs for mixture modeling
+  - Automatic data quality validation and constraint checking (S ≤ C)
+
+### New Features: Multiple Phenotypes Extension
+
+* **`calculate_multiple_pheprobs_original()`**: Proper multiple phenotype analysis
+  - Independent binomial mixture model for each phenotype
+  - Shared healthcare utilization extraction for efficiency
+  - Separate interpretable probabilities per phenotype
+  - Avoids meaningless mixing of unrelated concept IDs
+
+* **Correlation and comorbidity analysis**:
+  - Phenotype correlation matrices with statistical testing
+  - Comorbidity pattern identification (patients with multiple conditions)
+  - Cross-phenotype validation and consistency checking
+
+* **Rich visualization suite** (`R/multiple_phenotypes_viz.R`):
+  - `plot(results, type = "correlation_matrix")`: Phenotype correlation heatmaps
+  - `plot(results, type = "probability_distributions")`: Probability histograms
+  - `plot(results, type = "comorbidity_network")`: Comorbidity relationships
+  - `plot(results, type = "convergence_diagnostics")`: Model convergence plots
+
+### Enhanced API
+
+* **New parameters for original method**:
+  - `max_iterations`: Maximum EM algorithm iterations (default: 1000)
+  - `convergence_threshold`: EM convergence threshold (default: 1e-6)
+  - `init_method`: Parameter initialization ("random", "kmeans", "manual")
+  - `data_validation`: Automatic data quality assessment (default: TRUE)
+  - `model_diagnostics`: Include convergence and stability diagnostics (default: TRUE)
+
+* **Multiple phenotypes parameters**:
+  - `phenotype_correlation_analysis`: Analyze correlations between phenotypes (default: TRUE)
+  - `joint_validation`: Cross-phenotype validation (default: TRUE)
+
+### Output Enhancements
+
+* **Rich result objects**:
+  - Class `"pheprob_original"` for single phenotype results
+  - Class `"pheprob_multiple_original"` for multiple phenotype results
+  - Model parameters, diagnostics, and validation results as attributes
+
+* **Enhanced print/summary methods**:
+  - `print.pheprob_original()`: Concise result overview
+  - `summary.pheprob_original()`: Detailed model information
+  - Parameter estimates, convergence status, probability summaries
+
+### Documentation and Examples
+
+* **Updated documentation**:
+  - README reflects PheProb methodology (Sinnott et al., 2018)
+  - Function documentation updated for new parameters
+  - Examples demonstrate proper probabilistic phenotyping
+
+* **Comprehensive examples**:
+  - `example_original_pheprob.R`: PheProb methodology demonstration (Sinnott et al., 2018)
+  - `example_multiple_phenotypes.R`: Multiple phenotype analysis examples
+  - Comparison of old vs new approaches
+
+### Performance and Quality
+
+* **Data quality validation**:
+  - Automatic assessment of binomial data quality
+  - S ≤ C constraint validation
+  - Healthcare utilization reasonableness checks
+  - Quality scoring and recommendations
+
+* **Model diagnostics**:
+  - EM convergence monitoring
+  - Parameter stability assessment
+  - Component separation analysis
+  - Cross-validation support
+
+### Migration Guide
+
+```r
+# Old approach (deprecated)
+scores <- calculate_pheprob(concepts, method = "composite")
+
+# New approach (recommended - Sinnott et al., 2018 methodology)
+scores <- calculate_pheprob(concepts, method = "original")
+
+# Multiple phenotypes (replaces mixed concepts)
+phenotypes <- list(diabetes = c(...), cvd = c(...))
+multi_scores <- calculate_multiple_pheprobs(phenotypes, method = "original")
+```
+
+### Backward Compatibility
+
+* **Graceful deprecation**: Old methods continue to work with warnings
+* **Migration warnings**: Clear guidance for upgrading to new methodology
+* **No breaking changes**: Existing code continues to function
+
+---
+
 # pheprobAoU 0.1.0
 
-## Initial Release
+## Initial Release (Deprecated)
 
-This is the first release of `pheprobAoU`, a comprehensive R package for calculating PheProb (phenotype probabilities) using electronic health record data from the All of Us Research Program.
+*Note: This initial release used deterministic scoring methods that have been deprecated in favor of the PheProb methodology (Sinnott et al., 2018) in v1.0.0.*
 
-### New Features
+### Deprecated Features
 
-* **Core Functions**
-  - `calculate_pheprob()`: Main function for PheProb calculation with multiple scoring methods
-  - `extract_ehr_features()`: Extract EHR features from All of Us database
-  - `validate_concept_ids()`: Validate OMOP concept IDs
-  - `validate_person_ids()`: Validate person IDs
-  - `create_feature_matrix()`: Convert features to analysis-ready matrices
-  - `export_features()`: Export results to various formats
+* ~~Simple binary scoring~~ → Use `method = "original"` 
+* ~~Weighted frequency scoring~~ → Use `method = "original"`
+* ~~Temporal scoring~~ → Use `method = "original"`
+* ~~Composite scoring~~ → Use `method = "original"`
 
-* **Scoring Methods**
-  - Simple binary scoring (presence/absence)
-  - Weighted frequency scoring using occurrence counts
-  - Temporal scoring considering recency of events
-  - Composite scoring combining multiple approaches
+### Migration Required
 
-* **Advanced Features**
-  - Batch processing for large datasets
-  - Multiple normalization options (minmax, zscore, logistic)
-  - Flexible output formats (matrix, long, wide)
-  - Comprehensive input validation and error handling
-  - Progress indicators for long-running operations
-  - Support for custom concept weights
-  - Temporal filtering with date ranges
-  - Multi-domain EHR data extraction
-
-* **Documentation**
-  - Complete function documentation with examples
-  - Comprehensive README with installation and usage guides
-  - Detailed vignette with real-world phenotyping examples
-  - Extensive unit tests covering all major functionality
-
-* **Integration**
-  - Seamless integration with `allofus` R package
-  - Support for standard OMOP Common Data Model
-  - Export compatibility with common analysis workflows
-  - CSV and RDS output formats
-
-### Technical Details
-
-* **R Version**: Requires R >= 4.0.0
-* **Dependencies**: Integrated with tidyverse ecosystem (`dplyr`, `tibble`, `tidyr`)
-* **Performance**: Optimized for large-scale EHR data processing
-* **Testing**: Comprehensive test suite with >95% code coverage
-
-### Getting Started
-
-```r
-# Install from GitHub
-devtools::install_github("yourusername/pheprobAoU")
-
-# Basic usage
-library(pheprobAoU)
-diabetes_concepts <- c(201826, 4329847, 9201)
-scores <- calculate_pheprob(diabetes_concepts)
-```
-
-For detailed examples and advanced usage, see the package vignette:
-```r
-vignette("phenotyping-with-pheprobAoU")
-```
-
-### Acknowledgments
-
-This package was developed to support phenotype research using the All of Us Research Program data. We thank the All of Us participants and research community for making this work possible.
+Users of v0.1.0 should upgrade to v1.0.0 and switch to `method = "original"` for proper probabilistic phenotyping with the PheProb binomial mixture model methodology (Sinnott et al., 2018).

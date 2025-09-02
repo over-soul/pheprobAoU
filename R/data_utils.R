@@ -33,6 +33,255 @@
 #' features <- extract_ehr_features(diabetes_concepts)
 #' head(features)
 #' }
+
+
+#' Extract Total Healthcare Utilization Counts
+#'
+#' Extracts total billing code counts for each person across all clinical domains.
+#' This is required for the original PheProb binomial mixture model which models
+#' disease-relevant codes as a subset of total healthcare utilization.
+#'
+#' @param person_ids A numeric vector of person IDs. If NULL, extracts for all
+#'   available persons in the database.
+#' @param domains A character vector specifying which OMOP domains to include
+#'   in total counts. Default: c("condition", "procedure", "drug", "measurement", "observation")
+#' @param date_range A list with 'start' and 'end' dates (Date objects) to limit
+#'   the temporal scope. If NULL, includes all available data.
+#' @param exclude_concepts Optional vector of concept IDs to exclude from total counts
+#'   (e.g., administrative codes that don't represent clinical activity)
+#' @param max_persons Maximum number of persons to process (for testing/limiting).
+#'   If NULL, processes all available persons.
+#'
+#' @return A tibble with columns:
+#'   \item{person_id}{Person identifier}
+#'   \item{total_code_count}{Total number of billing codes across all domains}
+#'   \item{condition_count}{Number of condition codes}
+#'   \item{procedure_count}{Number of procedure codes}
+#'   \item{drug_count}{Number of drug codes}
+#'   \item{measurement_count}{Number of measurement codes}
+#'   \item{observation_count}{Number of observation codes}
+#'   \item{first_code_date}{Date of first billing code}
+#'   \item{last_code_date}{Date of last billing code}
+#'   \item{healthcare_span_days}{Days between first and last codes}
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Extract total healthcare utilization for all patients
+#' total_counts <- extract_total_healthcare_utilization()
+#' 
+#' # Extract for specific patients with date filtering
+#' specific_counts <- extract_total_healthcare_utilization(
+#'   person_ids = c(12345, 67890),
+#'   date_range = list(start = as.Date("2020-01-01"), end = Sys.Date())
+#' )
+#' }
+extract_total_healthcare_utilization <- function(person_ids = NULL,
+                                               domains = c("condition", "procedure", "drug", "measurement", "observation"),
+                                               date_range = NULL,
+                                               exclude_concepts = NULL,
+                                               max_persons = NULL) {
+  
+  # Validate inputs
+  if (!is.null(person_ids) && (!is.numeric(person_ids) || length(person_ids) == 0)) {
+    cli::cli_abort("person_ids must be a non-empty numeric vector or NULL")
+  }
+  
+  # Map domain names to OMOP tables
+  domain_tables <- list(
+    "condition" = "condition_occurrence",
+    "procedure" = "procedure_occurrence", 
+    "drug" = "drug_exposure",
+    "measurement" = "measurement",
+    "observation" = "observation"
+  )
+  
+  # Filter to valid domains
+  valid_domains <- intersect(domains, names(domain_tables))
+  if (length(valid_domains) == 0) {
+    cli::cli_abort("No valid domains specified. Valid options: {paste(names(domain_tables), collapse = ', ')}")
+  }
+  
+  cli::cli_alert_info("Extracting total healthcare utilization from {length(valid_domains)} domain(s): {paste(valid_domains, collapse = ', ')}")
+  
+  # Initialize progress bar
+  cli::cli_progress_bar("Extracting domain counts", total = length(valid_domains))
+  
+  # Extract counts from each domain
+  domain_counts <- list()
+  
+  for (domain in valid_domains) {
+    cli::cli_progress_update()
+    
+    table_name <- domain_tables[[domain]]
+    domain_count <- extract_domain_total_counts(
+      table_name = table_name,
+      person_ids = person_ids,
+      date_range = date_range,
+      exclude_concepts = exclude_concepts,
+      max_persons = max_persons
+    )
+    
+    if (nrow(domain_count) > 0) {
+      domain_counts[[domain]] <- domain_count
+    }
+  }
+  
+  cli::cli_progress_done()
+  
+  # Combine domain counts
+  if (length(domain_counts) > 0) {
+    combined_counts <- combine_domain_counts(domain_counts, valid_domains)
+    
+    cli::cli_alert_success("Extracted total counts for {nrow(combined_counts)} persons")
+    cli::cli_alert_info("Total code count range: {min(combined_counts$total_code_count)} - {max(combined_counts$total_code_count)}")
+    
+    return(combined_counts)
+  } else {
+    cli::cli_alert_warning("No healthcare utilization data found")
+    return(create_empty_utilization_tibble())
+  }
+}
+
+
+#' Prepare Data for Original PheProb Binomial Mixture Model
+#'
+#' Extracts and combines total healthcare utilization counts with disease-relevant
+#' code counts to create the (S, C) pairs required for the original PheProb
+#' binomial mixture model.
+#'
+#' @param concept_ids A numeric vector of disease-relevant OMOP concept IDs
+#' @param person_ids A numeric vector of person IDs. If NULL, includes all available persons.
+#' @param domains A character vector specifying which OMOP domains to search.
+#'   Default: c("condition", "procedure", "drug", "measurement", "observation")
+#' @param date_range A list with 'start' and 'end' dates (Date objects) to limit
+#'   the temporal scope of data extraction. If NULL, no date filtering is applied.
+#' @param exclude_concepts Optional vector of concept IDs to exclude from total counts
+#' @param max_persons Maximum number of persons to process (for testing/limiting).
+#'   If NULL, processes all available persons.
+#'
+#' @return A tibble with columns required for binomial mixture model:
+#'   \item{person_id}{Person identifier}
+#'   \item{S}{Disease-relevant code count}
+#'   \item{C}{Total healthcare code count}
+#'   \item{success_rate}{S/C ratio}
+#'   \item{first_code_date}{Date of first billing code}
+#'   \item{last_code_date}{Date of last billing code}
+#'   \item{healthcare_span_days}{Days of healthcare activity}
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Prepare data for diabetes phenotyping
+#' diabetes_concepts <- c(201826, 4329847, 9201)
+#' pheprob_data <- prepare_pheprob_binomial_data(diabetes_concepts)
+#' 
+#' # Check data quality
+#' summary(pheprob_data)
+#' }
+prepare_pheprob_binomial_data <- function(concept_ids,
+                                         person_ids = NULL,
+                                         domains = c("condition", "procedure", "drug", "measurement", "observation"),
+                                         date_range = NULL,
+                                         exclude_concepts = NULL,
+                                         max_persons = NULL) {
+  
+  # Validate concept IDs
+  if (!is.numeric(concept_ids) || length(concept_ids) == 0) {
+    cli::cli_abort("concept_ids must be a non-empty numeric vector")
+  }
+  
+  cli::cli_alert_info("Preparing binomial mixture data for {length(concept_ids)} disease-relevant concepts")
+  
+  # Step 1: Extract total healthcare utilization (C)
+  cli::cli_progress_step("Extracting total healthcare utilization...")
+  total_utilization <- extract_total_healthcare_utilization(
+    person_ids = person_ids,
+    domains = domains,
+    date_range = date_range,
+    exclude_concepts = exclude_concepts,
+    max_persons = max_persons
+  )
+  
+  if (nrow(total_utilization) == 0) {
+    cli::cli_abort("No healthcare utilization data found")
+  }
+  
+  # Step 2: Extract disease-relevant features (S)
+  cli::cli_progress_step("Extracting disease-relevant code counts...")
+  relevant_features <- extract_ehr_features(
+    concept_ids = concept_ids,
+    person_ids = total_utilization$person_id,  # Only include patients with total data
+    domains = domains,
+    date_range = date_range,
+    max_persons = max_persons
+  )
+  
+  # Step 3: Aggregate disease-relevant counts by person
+  if (nrow(relevant_features) > 0) {
+    relevant_counts <- relevant_features %>%
+      dplyr::group_by(.data$person_id) %>%
+      dplyr::summarise(
+        S = sum(.data$occurrence_count, na.rm = TRUE),
+        n_relevant_concepts = dplyr::n_distinct(.data$concept_id),
+        first_relevant_date = min(.data$first_occurrence_date, na.rm = TRUE),
+        last_relevant_date = max(.data$last_occurrence_date, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } else {
+    # No relevant codes found - create empty counts
+    relevant_counts <- tibble::tibble(
+      person_id = total_utilization$person_id,
+      S = 0L,
+      n_relevant_concepts = 0L,
+      first_relevant_date = as.Date(NA),
+      last_relevant_date = as.Date(NA)
+    )
+  }
+  
+  # Step 4: Combine total and relevant counts
+  cli::cli_progress_step("Combining total and relevant counts...")
+  pheprob_data <- total_utilization %>%
+    dplyr::select(.data$person_id, C = .data$total_code_count, 
+                 .data$first_code_date, .data$last_code_date, .data$healthcare_span_days) %>%
+    dplyr::left_join(relevant_counts, by = "person_id") %>%
+    dplyr::mutate(
+      S = dplyr::if_else(is.na(.data$S), 0L, .data$S),
+      n_relevant_concepts = dplyr::if_else(is.na(.data$n_relevant_concepts), 0L, .data$n_relevant_concepts),
+      success_rate = .data$S / pmax(.data$C, 1)  # Avoid division by zero
+    )
+  
+  # Step 5: Data validation and quality checks
+  cli::cli_progress_step("Validating data quality...")
+  
+  # Check S <= C constraint
+  violations <- sum(pheprob_data$S > pheprob_data$C)
+  if (violations > 0) {
+    cli::cli_alert_warning("Found {violations} patients where S > C. Setting S = C for these cases.")
+    # Fix constraint violations by setting S = C where S > C
+    violation_indices <- which(pheprob_data$S > pheprob_data$C)
+    pheprob_data$S[violation_indices] <- pheprob_data$C[violation_indices]
+    pheprob_data$success_rate <- pheprob_data$S / pmax(pheprob_data$C, 1)
+  }
+  
+  # Remove patients with zero total codes (can't compute binomial probabilities)
+  zero_total <- sum(pheprob_data$C == 0)
+  if (zero_total > 0) {
+    cli::cli_alert_warning("Removing {zero_total} patients with zero total healthcare codes")
+    pheprob_data <- pheprob_data %>% dplyr::filter(.data$C > 0)
+  }
+  
+  # Final data summary
+  cli::cli_alert_success("Prepared binomial mixture data:")
+  cli::cli_alert_info("  • {nrow(pheprob_data)} patients")
+  cli::cli_alert_info("  • Total codes (C): {min(pheprob_data$C)} - {max(pheprob_data$C)} (mean: {round(mean(pheprob_data$C), 1)})")
+  cli::cli_alert_info("  • Relevant codes (S): {min(pheprob_data$S)} - {max(pheprob_data$S)} (mean: {round(mean(pheprob_data$S), 1)})")
+  cli::cli_alert_info("  • Success rate: {round(min(pheprob_data$success_rate), 3)} - {round(max(pheprob_data$success_rate), 3)} (mean: {round(mean(pheprob_data$success_rate), 3)})")
+  
+  return(pheprob_data)
+}
 extract_ehr_features <- function(concept_ids, 
                                 person_ids = NULL, 
                                 domains = c("condition", "procedure", "drug", "measurement", "observation"),
@@ -133,6 +382,14 @@ extract_domain_features <- function(table_name, concept_ids, person_ids, date_ra
   concept_column <- get_concept_column(table_name)
   date_column <- get_date_column(table_name)
   
+  # Validate concept_ids to prevent SQL injection
+  if (!all(is.numeric(concept_ids)) || any(is.na(concept_ids)) || any(concept_ids <= 0)) {
+    cli::cli_abort("Invalid concept_ids: must be positive integers")
+  }
+  
+  # Convert to integer to ensure safety
+  safe_concept_ids <- as.integer(concept_ids)
+  
   # Base query
   base_query <- glue::glue("
     SELECT 
@@ -144,26 +401,43 @@ extract_domain_features <- function(table_name, concept_ids, person_ids, date_ra
       MAX({date_column}) OVER (PARTITION BY person_id, {concept_column}) as last_occurrence_date,
       ROW_NUMBER() OVER (PARTITION BY person_id, {concept_column} ORDER BY {date_column}) as rn
     FROM {table_name}
-    WHERE {concept_column} IN ({paste(concept_ids, collapse = ', ')})
+    WHERE {concept_column} IN ({paste(safe_concept_ids, collapse = ', ')})
   ")
   
   # Add person ID filter if specified
   if (!is.null(person_ids) && length(person_ids) > 0) {
-    person_filter <- paste(person_ids, collapse = ", ")
+    # Validate person_ids to prevent SQL injection
+    if (!all(is.numeric(person_ids)) || any(is.na(person_ids)) || any(person_ids <= 0)) {
+      cli::cli_abort("Invalid person_ids: must be positive integers")
+    }
+    # Convert to integer to ensure safety
+    safe_person_ids <- as.integer(person_ids)
+    person_filter <- paste(safe_person_ids, collapse = ", ")
     base_query <- paste(base_query, "AND person_id IN (", person_filter, ")")
   }
   
   # Add date range filter if specified
   if (!is.null(date_range) && !is.null(date_range$start) && !is.null(date_range$end)) {
+    # Validate dates to prevent SQL injection
+    if (!inherits(date_range$start, "Date") || !inherits(date_range$end, "Date")) {
+      cli::cli_abort("date_range$start and date_range$end must be Date objects")
+    }
+    safe_start_date <- as.character(date_range$start)
+    safe_end_date <- as.character(date_range$end)
     base_query <- paste(base_query, 
                        "AND", date_column, "BETWEEN", 
-                       paste0("'", date_range$start, "'"), "AND", 
-                       paste0("'", date_range$end, "'"))
+                       paste0("'", safe_start_date, "'"), "AND", 
+                       paste0("'", safe_end_date, "'"))
   }
   
   # Add person limit if specified
   if (!is.null(max_persons)) {
-    base_query <- paste(base_query, "AND person_id IN (SELECT DISTINCT person_id FROM", table_name, "LIMIT", max_persons, ")")
+    # Validate max_persons to prevent SQL injection
+    if (!is.numeric(max_persons) || length(max_persons) != 1 || is.na(max_persons) || max_persons <= 0) {
+      cli::cli_abort("Invalid max_persons: must be a positive integer")
+    }
+    safe_max_persons <- as.integer(max_persons)
+    base_query <- paste(base_query, "AND person_id IN (SELECT DISTINCT person_id FROM", table_name, "LIMIT", safe_max_persons, ")")
   }
   
   # Wrap in a query to get unique person-concept combinations
@@ -357,7 +631,7 @@ create_feature_matrix <- function(features_data, feature_type = "binary", fill_m
         "count" = .data$occurrence_count,
         "log_count" = log(.data$occurrence_count + 1),
         "recency" = pmax(0, 365 - as.numeric(Sys.Date() - .data$last_occurrence_date)),
-        stop("Invalid feature_type. Must be one of: binary, count, log_count, recency")
+        cli::cli_abort("Invalid feature_type. Must be one of: binary, count, log_count, recency")
       )
     )
   

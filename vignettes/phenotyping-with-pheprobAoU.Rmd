@@ -1,5 +1,5 @@
 ---
-title: "Phenotyping with pheprobAoU: A Comprehensive Guide"
+title: "PheProb Implementation with pheprobAoU"
 author: "pheprobAoU Development Team"
 date: "`r Sys.Date()`"
 output: 
@@ -7,7 +7,7 @@ output:
     toc: true
     toc_depth: 3
 vignette: >
-  %\VignetteIndexEntry{Phenotyping with pheprobAoU: A Comprehensive Guide}
+  %\VignetteIndexEntry{PheProb Implementation with pheprobAoU}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -22,16 +22,20 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-The `pheprobAoU` package provides a comprehensive toolkit for calculating PheProb (phenotype probabilities) using electronic health record (EHR) data from the All of Us Research Program. This vignette demonstrates real-world applications of the package for common phenotyping tasks.
+The `pheprobAoU` package implements the **PheProb methodology** (Sinnott et al., 2018) using binomial mixture models for probabilistic phenotyping with electronic health record (EHR) data from the All of Us Research Program. This vignette demonstrates the proper implementation and application of the PheProb algorithm as described by Sinnott and colleagues.
 
 ## What is PheProb?
 
-PheProb represents the likelihood that a participant exhibits a particular phenotype based on their clinical history recorded in EHR data. Unlike simple binary phenotype definitions, PheProb provides a probabilistic approach that:
+The PheProb methodology (Sinnott et al., 2018) uses binomial mixture models to estimate phenotype probabilities P(Y=1|S,C) where:
 
-- Accounts for varying levels of clinical evidence
-- Incorporates temporal patterns in medical history
-- Handles missing or incomplete data gracefully
-- Provides graded phenotype assessments rather than binary classifications
+- **S**: Count of disease-relevant billing codes for a patient
+- **C**: Total healthcare utilization (total billing codes) for a patient  
+- **Y**: Binary phenotype status (1 = case, 0 = control)
+
+The model accounts for:
+- **Population heterogeneity**: Cases vs. controls have different code generation rates
+- **Healthcare utilization bias**: Patients with more healthcare contact have different baseline phenotype probabilities
+- **Statistical rigor**: Proper probabilistic framework with uncertainty quantification
 
 ## Loading the Package
 
@@ -41,11 +45,11 @@ library(dplyr)
 library(ggplot2)
 ```
 
-# Basic Phenotyping Workflow
+# PheProb Workflow
 
 ## Step 1: Define Your Phenotype with OMOP Concepts
 
-The first step in any phenotyping analysis is to identify the relevant OMOP concept IDs that define your phenotype of interest. 
+The first step is to identify OMOP concept IDs that define your phenotype of interest.
 
 ```{r}
 # Example: Type 2 Diabetes Mellitus
@@ -61,47 +65,73 @@ validation_result <- validate_concept_ids(diabetes_concepts)
 print(validation_result$summary)
 ```
 
-## Step 2: Calculate PheProb Scores
+## Step 2: Calculate PheProb Probabilities
 
 ```{r}
-# Basic PheProb calculation
+# PheProb calculation using binomial mixture model (Sinnott et al., 2018)
 diabetes_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "composite",
+  method = "original",  # Uses binomial mixture model
   progress = TRUE
 )
 
-# View the first few results
+# View the first few results - true probabilities P(Y=1|S,C)
 head(diabetes_scores)
+#   person_id pheprob_score total_codes relevant_codes success_rate
+#      123456         0.891          45              8        0.178
+#      234567         0.234          23              2        0.087
 ```
 
 ## Step 3: Analyze and Interpret Results
 
 ```{r}
-# Summary statistics
+# Summary statistics for true probabilities
 summary(diabetes_scores$pheprob_score)
 
-# Distribution of scores
+# Distribution of probabilities
 hist(diabetes_scores$pheprob_score, 
-     main = "Distribution of Diabetes PheProb Scores",
-     xlab = "PheProb Score",
+     main = "Distribution of Diabetes Phenotype Probabilities",
+     xlab = "P(Y=1|S,C) - Phenotype Probability",
      ylab = "Frequency")
 
-# Identify high-probability cases
+# Identify high-confidence cases
 high_prob_diabetes <- diabetes_scores[diabetes_scores$pheprob_score > 0.8, ]
-cat("Number of high-probability diabetes cases:", nrow(high_prob_diabetes))
+cat("Number of high-confidence diabetes cases:", nrow(high_prob_diabetes))
+
+# Model diagnostics
+summary(diabetes_scores)
+# Shows: model parameters (p₁, p₀, α₀, α₁), convergence status, data quality
 ```
 
-# Advanced Phenotyping Examples
+# Advanced Applications
+
+## Understanding the Binomial Mixture Model
+
+The PheProb model (Sinnott et al., 2018) makes the following assumptions:
+
+1. **Disease-relevant codes (S) follow a binomial distribution** given total codes (C) and phenotype status (Y)
+2. **Cases and controls have different success rates**: p₁ (cases) > p₀ (controls)  
+3. **Healthcare utilization affects phenotype probability**: φ(c) = logistic(α₀ + α₁ × c)
+
+```{r}
+# Access model parameters
+model_params <- attr(diabetes_scores, "parameters")
+print(model_params)
+
+# p₁: success rate for cases (higher)
+# p₀: success rate for controls (lower)  
+# α₀: baseline log-odds of being a case
+# α₁: effect of healthcare utilization on case probability
+```
 
 ## Multiple Phenotypes Analysis
 
-One of the key improvements in pheprobAoU is the ability to analyze multiple unrelated phenotypes simultaneously, avoiding the meaningless aggregation that occurs when mixing unrelated concept IDs.
+The key improvement is analyzing multiple unrelated phenotypes separately, each with its own binomial mixture model:
 
 ### The Problem with Mixed Concepts
 
 ```{r}
-# DON'T DO THIS - mixing unrelated diseases
+# ❌ DON'T DO THIS - mixing unrelated diseases produces meaningless results
 mixed_concepts <- c(
   201826,   # Type 2 diabetes
   313217,   # Atrial fibrillation  
@@ -109,33 +139,57 @@ mixed_concepts <- c(
   4030518   # Chronic kidney disease
 )
 
-# The resulting pheprob_score would be meaningless
-# It's not the probability of any coherent phenotype!
+# Single pheprob_score for this mix is uninterpretable!
+# What does P(Y=1|S,C) = 0.73 mean for this mixture?
 ```
 
-### Solution: Multiple Phenotypes Mode
+### ✅ Solution: Multiple Independent Models
 
 ```{r}
-# BETTER APPROACH - define separate phenotypes
+# CORRECT APPROACH - separate phenotypes, separate models
 phenotypes <- list(
   diabetes = c(201826, 4329847, 9201),
-  cardiovascular = c(314866, 313217, 316866, 4329847),
+  cardiovascular = c(314866, 313217, 316866),
   mental_health = c(4152280, 4226263, 436073),
   kidney_disease = c(4030518, 192359, 4030319)
 )
 
-# Calculate separate probabilities for each phenotype
+# Each phenotype gets its own binomial mixture model
 multi_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = phenotypes,
-  method = "composite"
+  method = "original",  # Independent binomial mixture models
+  phenotype_correlation_analysis = TRUE,
+  joint_validation = TRUE
 )
 
-# View results - each phenotype gets its own meaningful probability
+# View results - separate interpretable probabilities
 head(multi_scores)
+#   person_id diabetes_prob cardiovascular_prob mental_health_prob kidney_disease_prob
+#      123456         0.891               0.456               0.123               0.234
 ```
 
-**Output:**
+## Correlation and Comorbidity Analysis
+
+```{r}
+# Access correlation analysis
+summary(multi_scores)
+
+# Shows:
+# - Individual phenotype results  
+# - Model convergence for each phenotype
+# - Correlation matrix between phenotypes
+# - Comorbidity patterns (patients with multiple conditions)
+
+# Plot correlation matrix
+plot(multi_scores, type = "correlation_matrix")
+
+# Plot probability distributions  
+plot(multi_scores, type = "probability_distributions")
 ```
+
+**Example Output:**
+```
+# Multiple Phenotype Results:
 # A tibble: 6 × 5
   person_id diabetes_prob cardiovascular_prob mental_health_prob kidney_disease_prob
       <dbl>         <dbl>               <dbl>              <dbl>               <dbl>
@@ -749,3 +803,7 @@ For more complex phenotyping tasks, consider combining PheProb scores with other
 ```{r}
 sessionInfo()
 ```
+
+# References
+
+Sinnott, J. A., Cai, F., Yu, S., Hejblum, B. P., Hong, C., Kohane, I. S., & Liao, K. P. (2018). PheProb: probabilistic phenotyping using diagnosis codes to improve power for genetic association studies. Journal of the American Medical Informatics Association : JAMIA, 25(10), 1359–1365. https://doi.org/10.1093/jamia/ocy056

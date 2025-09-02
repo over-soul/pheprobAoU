@@ -1,16 +1,18 @@
 Package: pheprobAoU
 Type: Package
 Title: Calculate PheProb (Phenotype Probabilities) Using All of Us EHR Data
-Version: 0.1.0
+Version: 1.0.0
 Authors@R: 
     person("Alireza Ehteshami", "alireza.ehteshami@emory.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0001-9637-1695"))
-Description: Provides functions to calculate PheProb (phenotype probabilities) 
-    using electronic health record (EHR) data from the All of Us Research Program.
-    The package interfaces with the 'allofus' package to extract relevant clinical
-    data and compute phenotype probabilities for specified OMOP concept IDs.
-    Supports batch processing, comprehensive error handling, and multiple output
-    formats for large-scale phenotype research.
+Description: Implements the PheProb methodology (Sinnott et al., 2018) using binomial 
+    mixture models for probabilistic phenotyping with electronic health record (EHR) 
+    data from the All of Us Research Program. PheProb models disease-relevant billing 
+    codes as a subset of total healthcare utilization, providing true phenotype 
+    probabilities P(Y=1|S,C) where S is relevant code count and C is total healthcare 
+    utilization. Supports multiple phenotype analysis, correlation assessment, and 
+    comprehensive validation for biomedical research applications. See Sinnott et al. 
+    (2018) <doi:10.1093/jamia/ocy056>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true

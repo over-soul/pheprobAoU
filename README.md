@@ -1,23 +1,23 @@
-# pheprobAoU: Calculate PheProb using All of Us EHR Data
+# pheprobAoU: PheProb Implementation for All of Us EHR Data
 
-[![R-CMD-check](https://github.com/yourusername/pheprobAoU/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/yourusername/pheprobAoU/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/yourusername/pheprobAoU/branch/main/graph/badge.svg)](https://app.codecov.io/gh/yourusername/pheprobAoU?branch=main)
+[![R-CMD-check](https://github.com/over-soul/pheprobAoU/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/over-soul/pheprobAoU/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/over-soul/pheprobAoU/branch/main/graph/badge.svg)](https://app.codecov.io/gh/over-soul/pheprobAoU?branch=main)
 [![CRAN status](https://www.r-pkg.org/badges/version/pheprobAoU)](https://CRAN.R-project.org/package=pheprobAoU)
 
 ## Overview
 
-`pheprobAoU` is an R package for calculating PheProb (phenotype probabilities) using electronic health record (EHR) data from the All of Us Research Program. The package provides a comprehensive toolkit for extracting clinical features and computing probabilistic phenotype predictions based on OMOP concept IDs.
+`pheprobAoU` implements the **PheProb methodology** (Sinnott et al., 2018) using binomial mixture models for probabilistic phenotyping with electronic health record (EHR) data from the All of Us Research Program. 
 
-PheProb scores represent the likelihood that a participant exhibits a particular phenotype based on their clinical history. This package supports multiple scoring methods, from simple binary presence/absence to sophisticated temporal and composite scoring approaches.
+The package provides true phenotype probabilities P(Y=1|S,C) by modeling disease-relevant billing codes (S) as a subset of total healthcare utilization (C), using an EM algorithm to estimate case/control populations with healthcare utilization adjustment.
 
 ## Key Features
 
-- **Seamless All of Us Integration**: Direct interface with the `allofus` R package for EHR data access
-- **Multiple Scoring Methods**: Binary, weighted, temporal, and composite PheProb calculations
-- **Flexible Input/Output**: Support for various data formats and export options
-- **Comprehensive Validation**: Robust input validation and error handling
-- **Batch Processing**: Efficient processing of large datasets with progress indicators
-- **Extensive Documentation**: Complete function documentation with real-world examples
+- **PheProb Implementation**: Faithful implementation of the binomial mixture model methodology from Sinnott et al. (2018)
+- **True Probabilistic Framework**: Returns P(Y=1|S,C) probabilities, not arbitrary scores
+- **Healthcare Utilization Adjustment**: Accounts for variable healthcare usage via φ(c) = logistic(α₀ + α₁ × c)  
+- **Multiple Phenotypes Support**: Independent models for multiple unrelated conditions with correlation analysis
+- **Comprehensive Validation**: Data quality assessment, model diagnostics, and clinical coherence validation
+- **Rich Analytics**: Comorbidity analysis, phenotype correlations, and uncertainty quantification
 
 ## Installation
 
@@ -40,7 +40,7 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
 }
 
 # Install pheprobAoU
-devtools::install_github("yourusername/pheprobAoU")
+devtools::install_github("over-soul/pheprobAoU")
 ```
 
 #### From CRAN (When Available)
@@ -62,7 +62,7 @@ The package will automatically install required dependencies:
 
 ## Quick Start
 
-### Basic Usage
+### Basic Usage (PheProb)
 
 ```r
 library(pheprobAoU)
@@ -74,33 +74,42 @@ diabetes_concepts <- c(
   9201      # Diabetes complication
 )
 
-# Calculate simple binary PheProb scores
+# Calculate PheProb probabilities using Sinnott et al. (2018) methodology (default method)
 diabetes_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "simple"
+  method = "original"  # Uses binomial mixture model
 )
 
-# View results
+# View results - true probabilities P(Y=1|S,C)
 head(diabetes_scores)
+#   person_id pheprob_score total_codes relevant_codes success_rate
+#      123456         0.891          45              8        0.178
+#      234567         0.234          23              2        0.087
 ```
 
-### Advanced Example with Custom Parameters
+### Multiple Phenotypes Analysis
 
 ```r
-# Calculate weighted PheProb scores with custom weights and date filtering
-advanced_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "weighted",
-  weights = c("201826" = 2.0, "4329847" = 1.5, "9201" = 1.0),
-  domains = c("condition", "procedure", "drug"),
-  date_range = list(
-    start = as.Date("2020-01-01"), 
-    end = Sys.Date()
-  ),
-  normalization = "minmax",
-  output_format = "wide",
-  output_file = "diabetes_pheprob_scores.csv"
+# Define separate phenotypes (avoids meaningless mixing)
+research_phenotypes <- list(
+  diabetes = c(201826, 4329847, 9201),
+  cardiovascular = c(314866, 313217, 316866),
+  mental_health = c(4152280, 4226263, 436073),
+  kidney_disease = c(4030518, 192359, 4030319)
 )
+
+# Calculate separate probabilities for each phenotype
+multi_scores <- calculate_multiple_pheprobs(
+  phenotype_concepts = research_phenotypes,
+  method = "original",
+  phenotype_correlation_analysis = TRUE
+)
+
+# View results - separate interpretable probabilities
+head(multi_scores)
+#   person_id diabetes_prob cardiovascular_prob mental_health_prob kidney_disease_prob
+#      123456         0.891               0.456               0.123               0.234
+#      234567         0.234               0.912               0.678               0.089
 ```
 
 ## Core Functions
@@ -127,7 +136,7 @@ calculate_pheprob(
 
 ### `calculate_multiple_pheprobs()`
 
-**NEW!** Calculate separate PheProb scores for multiple unrelated phenotypes:
+Calculate separate PheProb probabilities for multiple unrelated phenotypes using independent binomial mixture models:
 
 ```r
 # Define multiple phenotypes (avoids meaningless mixing of unrelated concepts)
@@ -137,16 +146,21 @@ phenotypes <- list(
   mental_health = c(4152280, 4226263)
 )
 
-# Get separate probability for each phenotype
+# Get separate probability for each phenotype using Sinnott et al. (2018) methodology
 multi_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = phenotypes,
-  method = "composite"
+  method = "original",
+  phenotype_correlation_analysis = TRUE,
+  joint_validation = TRUE
 )
 
 head(multi_scores)
 # person_id diabetes_prob cardiovascular_prob mental_health_prob
 #    123456          0.89                0.45               0.12
 #    234567          0.23                0.91               0.67
+
+# Access correlation analysis
+summary(multi_scores)  # Shows correlation matrix and comorbidity patterns
 ```
 
 ### `validate_concept_ids()`
@@ -194,50 +208,56 @@ feature_matrix <- create_feature_matrix(
 )
 ```
 
-## Scoring Methods
+## PheProb Methodology
 
-### Simple Binary Scoring
+### Binomial Mixture Model
 
-Assigns 1 for concept presence, 0 for absence:
+The package implements the PheProb methodology (Sinnott et al., 2018) using binomial mixture models:
 
 ```r
-binary_scores <- calculate_pheprob(
+# PheProb calculation using Sinnott et al. (2018) methodology (recommended)
+diabetes_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "simple"
+  method = "original"  # Default method
+)
+
+# Access model diagnostics
+summary(diabetes_scores)
+# Shows: model parameters (p₁, p₀, α₀, α₁), convergence, data quality
+```
+
+### Model Components
+
+The PheProb model (Sinnott et al., 2018) consists of:
+
+- **S**: Disease-relevant billing code count
+- **C**: Total healthcare utilization (billing codes)  
+- **Binomial likelihood**: P(S|C,Y) = Binomial(S; C, p_y)
+- **Healthcare utilization effect**: φ(c) = logistic(α₀ + α₁ × c)
+- **Final probability**: P(Y=1|S,C) via Bayes rule
+
+### Advanced Parameters
+
+```r
+# Advanced usage with custom parameters
+advanced_scores <- calculate_pheprob(
+  concept_ids = diabetes_concepts,
+  method = "original",
+  max_iterations = 1000,
+  convergence_threshold = 1e-6,
+  init_method = "kmeans",
+  data_validation = TRUE,
+  model_diagnostics = TRUE
 )
 ```
 
-### Weighted Frequency Scoring
+### Deprecated Methods (Legacy Support)
 
-Uses log-transformed occurrence counts:
-
-```r
-weighted_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "weighted"
-)
-```
-
-### Temporal Scoring
-
-Considers recency of clinical events:
+⚠️ **Note**: The following methods are deprecated and will be removed in a future version. Use the Sinnott et al. (2018) methodology with `method="original"` instead:
 
 ```r
-temporal_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "temporal"
-)
-```
-
-### Composite Scoring
-
-Combines multiple approaches:
-
-```r
-composite_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "composite"
-)
+# DEPRECATED - use method="original" (Sinnott et al., 2018) instead
+legacy_scores <- calculate_pheprob(concepts, method = "composite")  # Shows warning
 ```
 
 ## Real-World Examples
@@ -255,10 +275,10 @@ research_phenotypes <- list(
   chronic_kidney = c(4030518, 192359, 4030319, 4030320)
 )
 
-# Calculate separate probabilities
+# Calculate separate probabilities using Sinnott et al. (2018) methodology
 multi_phenotype_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = research_phenotypes,
-  method = "composite",
+  method = "original",
   output_format = "wide"
 )
 
@@ -292,18 +312,11 @@ cvd_concepts <- c(
   4329847   # Heart failure
 )
 
-# Calculate comprehensive CVD risk scores
+# Calculate CVD probabilities using PheProb (Sinnott et al., 2018)
 cvd_scores <- calculate_pheprob(
   concept_ids = cvd_concepts,
-  method = "composite",
+  method = "original",
   domains = c("condition", "procedure", "drug"),
-  weights = c(
-    "314866" = 3.0,   # MI weighted heavily
-    "313217" = 2.0,   # AFib moderately weighted
-    "316866" = 1.5,   # HTN baseline weight
-    "4329847" = 2.5   # HF weighted heavily
-  ),
-  normalization = "minmax",
   output_file = "cvd_risk_scores.csv"
 )
 
@@ -314,7 +327,7 @@ high_risk_patients <- cvd_scores[cvd_scores$pheprob_score > 0.8, ]
 ### Mental Health Phenotyping
 
 ```r
-# Depression and anxiety concepts
+# Depression and anxiety concepts  
 mental_health_concepts <- c(
   4152280,  # Major depressive disorder
   4226263,  # Anxiety disorder
@@ -497,8 +510,17 @@ lifetime_scores <- calculate_pheprob(
 If you use `pheprobAoU` in your research, please cite:
 
 ```
-[Your Name] et al. (2024). pheprobAoU: Calculate PheProb using All of Us EHR Data. 
-R package version 0.1.0. https://github.com/yourusername/pheprobAoU
+Ehteshami, A. (2024). pheprobAoU: Calculate PheProb using All of Us EHR Data. 
+R package version 1.0.0. https://github.com/over-soul/pheprobAoU
+```
+
+Please also cite the original PheProb methodology:
+
+```
+Sinnott, J. A., Cai, F., Yu, S., Hejblum, B. P., Hong, C., Kohane, I. S., & Liao, K. P. (2018). 
+PheProb: probabilistic phenotyping using diagnosis codes to improve power for genetic 
+association studies. Journal of the American Medical Informatics Association : JAMIA, 
+25(10), 1359–1365. https://doi.org/10.1093/jamia/ocy056
 ```
 
 ## Contributing
@@ -509,7 +531,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ```r
 # Clone the repository
-git clone https://github.com/yourusername/pheprobAoU.git
+git clone https://github.com/over-soul/pheprobAoU.git
 cd pheprobAoU
 
 # Install development dependencies
@@ -529,8 +551,8 @@ This package is licensed under the MIT License. See [LICENSE](LICENSE) file for 
 ## Support
 
 - **Documentation**: Full function documentation available via `?function_name`
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/yourusername/pheprobAoU/issues)
-- **Discussions**: Ask questions on [GitHub Discussions](https://github.com/yourusername/pheprobAoU/discussions)
+- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/over-soul/pheprobAoU/issues)
+- **Discussions**: Ask questions on [GitHub Discussions](https://github.com/over-soul/pheprobAoU/discussions)
 
 ## Acknowledgments
 
