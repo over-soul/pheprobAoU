@@ -62,6 +62,10 @@ The package will automatically install required dependencies:
 
 ```r
 library(pheprobAoU)
+# ✅ Package automatically connects to All of Us Research Program
+# 🔌 Attempting to connect to All of Us Research Program...
+# ✅ Successfully connected to All of Us Research Program
+# Available workspaces: 3
 
 # Define diabetes-related OMOP concept IDs
 diabetes_concepts <- c(
@@ -81,6 +85,52 @@ head(diabetes_scores)
 #   person_id pheprob_score total_codes relevant_codes success_rate
 #      123456         0.891          45              8        0.178
 #      234567         0.234          23              2        0.087
+```
+
+### Connection Management
+
+**Important**: Database connections only work within the All of Us Research Workbench environment, not in local development environments.
+
+#### In All of Us Environment:
+```r
+library(pheprobAoU)
+# 📊 pheprobAoU: PheProb Implementation for All of Us EHR Data
+# 🔌 Connecting to All of Us Research Program...
+# ✅ Successfully connected to All of Us Research Program
+
+# Check connection status
+is_aou_connected()
+# [1] TRUE
+
+# Manual connection (if needed)
+connect_aou()
+# ✅ Already connected to All of Us Research Program
+```
+
+#### In Local Environment:
+```r
+library(pheprobAoU)
+# 📊 pheprobAoU: PheProb Implementation for All of Us EHR Data
+# ℹ️  Running in local environment (not All of Us cloud)
+# ℹ️  Database connection only available in All of Us Research Workbench
+# 💡 For local development, use mock data or simulation functions
+
+is_aou_connected()
+# [1] FALSE
+
+connect_aou()
+# ⚠ Not in All of Us Research Workbench environment
+# ℹ Database connection only available within All of Us cloud
+```
+
+#### Control Auto-Connection:
+```r
+# Disable auto-connection
+options(pheprobAoU.auto_connect = FALSE)
+library(pheprobAoU)  # Will not attempt auto-connection
+
+# Re-enable auto-connection  
+options(pheprobAoU.auto_connect = TRUE)
 ```
 
 ### Multiple Phenotypes Analysis

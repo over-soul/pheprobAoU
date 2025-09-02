@@ -72,6 +72,170 @@ extract_domain_total_counts <- function(table_name,
   })
 }
 
+#' Check All of Us Connection Status
+#'
+#' Checks if the package is connected to All of Us Research Program database.
+#' Only works within All of Us Research Workbench environment.
+#'
+#' @return Logical indicating if connected
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' if (is_aou_connected()) {
+#'   # Run analysis
+#' } else {
+#'   connect_aou()
+#' }
+#' }
+is_aou_connected <- function() {
+  tryCatch({
+    if (requireNamespace("allofus", quietly = TRUE)) {
+      # Test connection with a simple query
+      result <- allofus::aou_sql("SELECT 1 LIMIT 1")
+      return(nrow(result) > 0)
+    }
+    return(FALSE)
+  }, error = function(e) {
+    return(FALSE)
+  })
+}
+
+#' Connect to All of Us Research Program
+#'
+#' Convenience function to establish All of Us database connection with status checking.
+#' Only works within All of Us Research Workbench environment.
+#'
+#' @param verbose Logical indicating whether to show connection status messages
+#' @return Logical indicating if connection was successful
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Connect with status messages (only works in All of Us environment)
+#' connect_aou()
+#' 
+#' # Connect silently
+#' connect_aou(verbose = FALSE)
+#' }
+connect_aou <- function(verbose = TRUE) {
+  
+  if (!requireNamespace("allofus", quietly = TRUE)) {
+    if (verbose) {
+      cli::cli_alert_danger("allofus package is required but not available")
+      cli::cli_alert_info("Install with: install.packages('allofus')")
+    }
+    return(FALSE)
+  }
+  
+  # Check if we're in an All of Us environment
+  # Note: Using a simple check here since is_aou_environment is internal
+  in_aou_env <- any(nzchar(c(
+    Sys.getenv("WORKSPACE_NAMESPACE"),
+    Sys.getenv("GOOGLE_CLOUD_PROJECT")
+  )))
+  
+  if (!in_aou_env) {
+    if (verbose) {
+      cli::cli_alert_warning("Not in All of Us Research Workbench environment")
+      cli::cli_alert_info("Database connection only available within All of Us cloud")
+      cli::cli_alert_info("For local development, use simulation or mock data functions")
+    }
+    return(FALSE)
+  }
+  
+  # Check if already connected
+  if (is_aou_connected()) {
+    if (verbose) {
+      cli::cli_alert_success("Already connected to All of Us Research Program")
+    }
+    return(TRUE)
+  }
+  
+  # Attempt connection
+  if (verbose) {
+    cli::cli_alert_info("Connecting to All of Us Research Program...")
+  }
+  
+  tryCatch({
+    allofus::aou_connect()
+    
+    # Verify connection
+    if (is_aou_connected()) {
+      if (verbose) {
+        cli::cli_alert_success("Successfully connected to All of Us Research Program")
+      }
+      return(TRUE)
+    } else {
+      if (verbose) {
+        cli::cli_alert_warning("Connection attempted but verification failed")
+      }
+      return(FALSE)
+    }
+    
+  }, error = function(e) {
+    if (verbose) {
+      cli::cli_alert_danger("Failed to connect: {e$message}")
+      cli::cli_alert_info("Ensure you're in All of Us Research Workbench environment")
+    }
+    return(FALSE)
+  })
+}
+
+#' @keywords internal
+extract_domain_total_counts <- function(table_name,
+                                       person_ids = NULL,
+                                       date_range = NULL,
+                                       exclude_concepts = NULL,
+                                       max_persons = NULL) {
+  
+  # This is a placeholder implementation - in real usage, this would query the All of Us database
+  # For now, we'll simulate the database query structure
+  
+  tryCatch({
+    
+    # Construct base query for total counts
+    base_query <- create_total_count_query(table_name, person_ids, date_range, exclude_concepts)
+    
+    # Execute query (placeholder - would use allofus package in real implementation)
+    domain_result <- execute_total_count_query(base_query, max_persons)
+    
+    # Format results
+    if (nrow(domain_result) > 0) {
+      formatted_result <- domain_result %>%
+        dplyr::select(
+          .data$person_id,
+          domain_count = .data$total_count,
+          first_date = .data$first_occurrence,
+          last_date = .data$last_occurrence
+        ) %>%
+        dplyr::mutate(
+          domain = extract_domain_from_table(table_name)
+        )
+      
+      return(formatted_result)
+    } else {
+      return(tibble::tibble(
+        person_id = integer(0),
+        domain_count = integer(0),
+        first_date = as.Date(character(0)),
+        last_date = as.Date(character(0)),
+        domain = character(0)
+      ))
+    }
+    
+  }, error = function(e) {
+    cli::cli_alert_warning("Failed to extract from {table_name}: {e$message}")
+    return(tibble::tibble(
+      person_id = integer(0),
+      domain_count = integer(0),
+      first_date = as.Date(character(0)),
+      last_date = as.Date(character(0)),
+      domain = character(0)
+    ))
+  })
+}
+
 #' Create Total Count Query
 #'
 #' Creates SQL query for extracting total billing code counts from OMOP tables.
