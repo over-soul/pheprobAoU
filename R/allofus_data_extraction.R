@@ -380,13 +380,6 @@ view_expanded_concepts <- function(concept_ids,
       cli::cli_alert_info("Including {length(concept_ids)} original concept{?s} in output")
     }
     
-    # Apply limit if specified
-    if (!is.null(max_concepts) && nrow(expanded_concepts) > max_concepts) {
-      expanded_concepts <- expanded_concepts %>%
-        dplyr::slice_head(n = max_concepts)
-      cli::cli_alert_warning("Limited output to first {max_concepts} concept{?s}")
-    }
-    
     # Prepare basic result
     result <- expanded_concepts %>%
       dplyr::rename(concept_id = descendant_concept_id)
@@ -416,10 +409,17 @@ view_expanded_concepts <- function(concept_ids,
     }
     
     # Arrange by concept name if available, otherwise by concept_id
-    if (include_names) {
+    if (include_names && "concept_name" %in% colnames(result)) {
       result <- result %>% dplyr::arrange(.data$concept_name)
     } else {
       result <- result %>% dplyr::arrange(.data$concept_id)
+    }
+    
+    # Apply limit if specified (after all processing to get correct final count)
+    if (!is.null(max_concepts) && nrow(result) > max_concepts) {
+      result <- result %>%
+        dplyr::slice_head(n = max_concepts)
+      cli::cli_alert_warning("Limited output to first {max_concepts} concept{?s}")
     }
     
     cli::cli_alert_success("Successfully retrieved expanded concept information")
