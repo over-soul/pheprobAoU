@@ -3,28 +3,40 @@
 #' This file contains functions that properly use the allofus package
 #' for data extraction, replacing the raw SQL approach.
 
-#' Extract Healthcare Utilization Using AllofUs Package
+#' Extract Healthcare Utilization Using Direct SQL Approach
 #'
 #' Extracts disease-relevant counts and total healthcare utilization using
-#' proper allofus package functions (aou_concept_set, aou_survey, etc.).
-#' This replaces the previous manual BigQuery approach that had compatibility issues.
+#' direct SQL queries with concept hierarchy expansion and proper healthcare utilization.
+#' This approach fixes critical issues with the previous aou_concept_set method.
 #'
 #' @param concept_ids A numeric vector of disease-relevant OMOP concept IDs
-#' @param person_ids A numeric vector of person IDs. If NULL, includes all available persons.
+#' @param person_ids A numeric vector of person IDs. If NULL, uses general population.
 #' @param domains A character vector specifying which OMOP domains to include.
-#'   Note: allofus package handles domain selection automatically based on concept types.
+#'   Currently focuses on condition_occurrence domain for optimal performance.
 #' @param date_range A list with 'start' and 'end' dates (Date objects) to limit
 #'   the temporal scope of data extraction. If NULL, no date filtering is applied.
-#' @param expand_concepts Logical indicating whether to expand concept hierarchies.
-#'   Note: allofus package handles concept expansion automatically.
+#' @param expand_concepts Logical indicating whether to expand concept hierarchies
+#'   using concept_ancestor table (default: TRUE).
 #' @param max_persons Maximum number of persons to process (for testing/limiting).
 #'   If NULL, processes all available persons.
 #'
 #' @return A tibble with columns required for binomial mixture model:
 #'   \item{person_id}{Person identifier}
-#'   \item{S}{Disease-relevant code count}
-#'   \item{C}{Total healthcare code count}
+#'   \item{S}{Disease-relevant code count (using concept hierarchy)}
+#'   \item{C}{Total healthcare code count (source-coded conditions)}
 #'   \item{success_rate}{S/C ratio}
+#'
+#' @details
+#' This function uses direct SQL queries to extract:
+#' - S: Disease-relevant billing code count (using concept hierarchy)
+#' - C: Total healthcare utilization (source-coded conditions) 
+#' - Proper case/control mixture from general population
+#' 
+#' Key improvements over previous approach:
+#' - Uses concept_ancestor for comprehensive phenotype expansion
+#' - Counts source-coded conditions for realistic healthcare utilization
+#' - Uses general population instead of survey-biased cohorts
+#' - Handles integer64 data types properly
 #'
 #' @export
 #'
@@ -52,110 +64,130 @@ extract_allofus_pheprob_data <- function(concept_ids,
     cli::cli_abort("allofus package is required but not available")
   }
   
-  cli::cli_alert_info("Extracting AllofUs data for {length(concept_ids)} disease-relevant concepts using proper allofus functions")
+  cli::cli_alert_info("Extracting AllofUs data for {length(concept_ids)} disease-relevant concepts using direct SQL approach")
+  
+  # Connect to database
+  con <- allofus::aou_connect()
   
   # Step 1: Create cohort
   cli::cli_progress_step("Creating participant cohort...")
   
   if (!is.null(person_ids) && length(person_ids) > 0) {
     # Use specific person IDs
-    cohort <- tibble::tibble(person_id = as.integer(person_ids))
+    cohort <- dplyr::tbl(con, "person") %>%
+      dplyr::filter(person_id %in% !!person_ids) %>%
+      dplyr::distinct(person_id)
     cli::cli_alert_info("Using specified {length(person_ids)} participants")
   } else {
-    # Use all participants via survey data
-    cohort <- allofus::aou_survey(questions = 1585838, question_output = "gender") %>%
-      dplyr::select(person_id)
+    # Use general population (not survey-based to avoid bias)
+    cohort <- dplyr::tbl(con, "person") %>%
+      dplyr::distinct(person_id)
     
     # Apply max_persons limit if specified
     if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0) {
       cohort <- cohort %>% 
-        dplyr::collect() %>%
         dplyr::slice_head(n = as.integer(max_persons))
       cli::cli_alert_info("Limited to {max_persons} participants for testing")
     }
   }
   
-  # Calculate cohort size (handle both remote and local tibbles)
-  if ("tbl_df" %in% class(cohort)) {
-    cohort_size <- nrow(cohort)
+  # Calculate cohort size
+  cohort_size_raw <- cohort %>% dplyr::summarise(n = dplyr::n()) %>% dplyr::collect() %>% dplyr::pull(n)
+  cohort_size <- as.numeric(cohort_size_raw)  # Handle integer64
+  cli::cli_alert_info("Cohort size: {as.character(cohort_size)} participants")
+  
+  # Step 2: Expand concepts using hierarchy if requested
+  cli::cli_progress_step("Expanding disease concepts using hierarchy...")
+  
+  concept_ids_integer <- as.integer(concept_ids)
+  
+  if (expand_concepts) {
+    # Use concept hierarchy for comprehensive phenotype definition
+    concept_ancestor <- dplyr::tbl(con, "concept_ancestor")
+    
+    disease_concepts_expanded <- concept_ancestor %>%
+      dplyr::filter(ancestor_concept_id %in% !!concept_ids_integer) %>%
+      dplyr::transmute(condition_concept_id = descendant_concept_id)
+    
+    expanded_count <- disease_concepts_expanded %>% 
+      dplyr::summarise(n = dplyr::n()) %>% 
+      dplyr::collect() %>% 
+      dplyr::pull(n)
+    cli::cli_alert_info("Expanded to {as.character(expanded_count)} related concepts")
   } else {
-    cohort_size_raw <- cohort %>% dplyr::summarise(n = dplyr::n()) %>% dplyr::collect() %>% dplyr::pull(n)
-    cohort_size <- as.numeric(cohort_size_raw)  # Handle integer64
-  }
-  cli::cli_alert_info("Cohort size: {cohort_size} participants")
-  
-  # Step 2: Extract disease-relevant codes (S) using proper allofus
-  cli::cli_progress_step("Extracting disease-relevant codes using aou_concept_set...")
-  
-  # Map domain names for allofus compatibility
-  allofus_domains <- domains[domains %in% c("condition", "procedure", "drug", "measurement", "observation")]
-  if (length(allofus_domains) == 0) {
-    allofus_domains <- "condition"  # Default to condition if no valid domains
+    # Use only the provided concepts
+    disease_concepts_expanded <- dplyr::tibble(condition_concept_id = concept_ids_integer) %>%
+      dplyr::copy_to(con, ., name = "temp_disease_concepts", temporary = TRUE)
+    cli::cli_alert_info("Using {length(concept_ids)} provided concepts without expansion")
   }
   
-  disease_data <- allofus::aou_concept_set(cohort,
-    concepts = concept_ids,
-    domains = allofus_domains,
-    output = "count",
-    concept_set_name = "disease_codes",
-    start_date = if (!is.null(date_range$start)) date_range$start else NULL,
-    end_date = if (!is.null(date_range$end)) date_range$end else NULL
-  ) %>%
-    dplyr::collect()
-  
-  # Convert integer64 to avoid issues
-  disease_data <- disease_data %>%
-    dplyr::mutate(
-      person_id = as.numeric(person_id),
-      disease_codes = as.numeric(disease_codes)
-    )
-  
-  cli::cli_alert_info("Disease prevalence: {round(mean(disease_data$disease_codes > 0) * 100, 2)}%")
-  
-  # Step 3: Calculate total healthcare utilization (C)
+  # Step 3: Calculate total healthcare utilization (C) - source-coded conditions
   cli::cli_progress_step("Calculating total healthcare utilization...")
   
-  # Use common healthcare concepts as proxy for total utilization
-  # This is a reasonable proxy that captures most healthcare encounters
-  common_healthcare_concepts <- c(
-    9202,      # Outpatient visit
-    9201,      # Inpatient visit
-    581477,    # Emergency room visit
-    concept_ids  # Include the disease concepts too
-  )
+  condition_occurrence <- dplyr::tbl(con, "condition_occurrence")
   
-  total_healthcare_data <- allofus::aou_concept_set(cohort,
-    concepts = unique(common_healthcare_concepts),
-    domains = allofus_domains,
-    output = "count", 
-    concept_set_name = "total_healthcare",
-    start_date = if (!is.null(date_range$start)) date_range$start else NULL,
-    end_date = if (!is.null(date_range$end)) date_range$end else NULL
-  ) %>%
-    dplyr::collect()
+  # Build date filter if specified
+  date_filter <- TRUE
+  if (!is.null(date_range)) {
+    if (!is.null(date_range$start)) {
+      date_filter <- date_filter & condition_occurrence$condition_start_date >= !!date_range$start
+    }
+    if (!is.null(date_range$end)) {
+      date_filter <- date_filter & condition_occurrence$condition_start_date <= !!date_range$end
+    }
+  }
   
-  # Convert integer64 to avoid issues
-  total_healthcare_data <- total_healthcare_data %>%
-    dplyr::mutate(
-      person_id = as.numeric(person_id),
-      total_healthcare = as.numeric(total_healthcare)
+  total_utilization <- condition_occurrence %>%
+    dplyr::inner_join(cohort, by = "person_id") %>%
+    dplyr::filter(!!date_filter) %>%
+    dplyr::summarise(
+      total_condition_codes = sum(dplyr::case_when(
+        condition_source_concept_id != 0 ~ 1L,
+        TRUE ~ 0L
+      ), na.rm = TRUE),
+      .by = person_id
     )
   
-  # Step 4: Combine into final PheProb dataset
+  # Step 4: Calculate disease-relevant codes (S)
+  cli::cli_progress_step("Extracting disease-relevant codes...")
+  
+  disease_codes <- condition_occurrence %>%
+    dplyr::inner_join(cohort, by = "person_id") %>%
+    dplyr::inner_join(disease_concepts_expanded, by = "condition_concept_id") %>%
+    dplyr::filter(!!date_filter) %>%
+    dplyr::summarise(
+      disease_codes = sum(dplyr::case_when(
+        condition_source_concept_id != 0 ~ 1L,
+        TRUE ~ 0L
+      ), na.rm = TRUE),
+      .by = person_id
+    )
+  
+  # Step 5: Combine into final PheProb dataset
   cli::cli_progress_step("Combining data for PheProb analysis...")
   
-  pheprob_data <- disease_data %>%
-    dplyr::left_join(total_healthcare_data, by = "person_id") %>%
+  pheprob_data <- total_utilization %>%
+    dplyr::left_join(disease_codes, by = "person_id") %>%
     dplyr::transmute(
       person_id = person_id,
-      S = disease_codes,
-      C = pmax(total_healthcare, disease_codes, na.rm = TRUE),  # C must be at least S
+      C = total_condition_codes,
+      S = dplyr::coalesce(disease_codes, 0L),
       success_rate = dplyr::case_when(
-        C > 0 ~ S / C,
+        C > 0 ~ as.numeric(S) / as.numeric(C),
         TRUE ~ 0.0
       )
     ) %>%
-    dplyr::filter(C > 0)  # Only include persons with some healthcare utilization
+    dplyr::filter(C > 0) %>%  # Only include persons with some healthcare utilization
+    dplyr::collect()
+  
+  # Convert integer64 to numeric to avoid display issues
+  pheprob_data <- pheprob_data %>%
+    dplyr::mutate(
+      person_id = as.numeric(person_id),
+      S = as.numeric(S),
+      C = as.numeric(C),
+      success_rate = as.numeric(success_rate)
+    )
   
   if (nrow(pheprob_data) == 0) {
     cli::cli_abort("No healthcare utilization data found")
@@ -163,9 +195,9 @@ extract_allofus_pheprob_data <- function(concept_ids,
   
   # Final summary
   cli::cli_alert_success("Extracted data for {nrow(pheprob_data)} persons")
-  cli::cli_alert_info("Total codes (C): {min(pheprob_data$C)} - {max(pheprob_data$C)}")
-  cli::cli_alert_info("Relevant codes (S): {min(pheprob_data$S)} - {max(pheprob_data$S)}")
-  cli::cli_alert_info("Disease prevalence: {round(mean(pheprob_data$S > 0) * 100, 2)}%")
+  cli::cli_alert_info("Total codes (C): {as.character(min(pheprob_data$C))} - {as.character(max(pheprob_data$C))}")
+  cli::cli_alert_info("Relevant codes (S): {as.character(min(pheprob_data$S))} - {as.character(max(pheprob_data$S))}")
+  cli::cli_alert_info("Disease prevalence: {as.character(round(mean(pheprob_data$S > 0) * 100, 2))}%")
   
   return(pheprob_data)
 }

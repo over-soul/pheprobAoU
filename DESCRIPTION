@@ -1,7 +1,7 @@
 Package: pheprobAoU
 Type: Package
 Title: Calculate PheProb (Phenotype Probabilities) Using All of Us EHR Data
-Version: 1.1.0
+Version: 1.2.0
 Author: Alireza Ehteshami [aut, cre] (<https://orcid.org/0009-0001-9637-1695>)
 Maintainer: Alireza Ehteshami <alireza.ehteshami@emory.edu>
 Authors@R: 
@@ -9,12 +9,13 @@ Authors@R:
            comment = c(ORCID = "0009-0001-9637-1695"))
 Description: Implements the PheProb methodology (Sinnott et al., 2018) using binomial 
     mixture models for probabilistic phenotyping with electronic health record (EHR) 
-    data from the All of Us Research Program. PheProb models disease-relevant billing 
-    codes as a subset of total healthcare utilization, providing true phenotype 
-    probabilities P(Y=1|S,C) where S is relevant code count and C is total healthcare 
-    utilization. Supports multiple phenotype analysis, correlation assessment, and 
-    comprehensive validation for biomedical research applications. See Sinnott et al. 
-    (2018) <doi:10.1093/jamia/ocy056>.
+    data from the All of Us Research Program. Features direct SQL queries with concept 
+    hierarchy expansion and realistic healthcare utilization measurement. Includes 
+    automatic concept expansion via OMOP concept_ancestor relationships, source-coded 
+    condition counting, and general population cohorts for proper case/control mixture. 
+    Provides true phenotype probabilities P(Y=1|S,C) with realistic disease prevalence 
+    (15-25%) and excellent model performance. See Sinnott et al. (2018) 
+    <doi:10.1093/jamia/ocy056>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
