@@ -11,6 +11,7 @@ The package provides true phenotype probabilities P(Y=1|S,C) by modeling disease
 - **PheProb Implementation**: Implementation of the binomial mixture model methodology from Sinnott et al. (2018)
 - **Direct SQL Approach**: High-performance data extraction using optimized database queries
 - **Concept Hierarchy Expansion**: Automatic expansion using OMOP concept_ancestor relationships
+- **Concept Transparency**: View expanded concepts to understand what's included in your analyses
 - **Real Healthcare Utilization**: Counts source-coded conditions for accurate utilization measurement
 - **Multiple Phenotypes Support**: Independent models for multiple unrelated conditions with correlation analysis
 - **Comprehensive Validation**: Data quality assessment, model diagnostics, and clinical coherence validation
@@ -213,7 +214,7 @@ print(validation_result$summary)
 
 ### `validate_phenotype_coherence()`
 
-**NEW!** Validate that phenotype definitions are clinically coherent:
+Validate that phenotype definitions are clinically coherent:
 
 ```r
 phenotypes <- list(
@@ -223,6 +224,43 @@ phenotypes <- list(
 
 validation <- validate_phenotype_coherence(phenotypes)
 # Warns about mixed domains and unrelated concepts
+```
+
+### `view_expanded_concepts()`
+
+View what concepts are included when hierarchy expansion is applied:
+
+```r
+# View expanded diabetes concepts to understand what's included in analysis
+diabetes_concepts <- c(201820, 201826, 4193704)
+expanded <- view_expanded_concepts(diabetes_concepts)
+
+# See the expansion results
+head(expanded)
+#   concept_id                                    concept_name domain_id vocabulary_id is_original
+#        201820                            Diabetes mellitus  Condition         SNOMED       TRUE
+#        201826                   Type 2 diabetes mellitus  Condition         SNOMED       TRUE
+#      4193704      Type 2 diabetes mellitus without complication  Condition         SNOMED       TRUE
+#      4099651                   Diabetic nephropathy  Condition         SNOMED      FALSE
+#      4193705    Type 2 diabetes mellitus with complication  Condition         SNOMED      FALSE
+#        ...                                      ...       ...           ...        ...
+
+# View just concept IDs without names (faster for large results)
+expanded_ids_only <- view_expanded_concepts(
+  diabetes_concepts, 
+  include_names = FALSE
+)
+
+# Limit results for overview
+expanded_limited <- view_expanded_concepts(
+  diabetes_concepts,
+  max_concepts = 50
+)
+
+# Summary statistics
+cat("Original concepts:", length(diabetes_concepts), "\n")
+cat("Expanded concepts:", nrow(expanded), "\n")
+cat("Expansion ratio:", round(nrow(expanded) / length(diabetes_concepts), 1), "x\n")
 ```
 
 ### `extract_total_healthcare_utilization()`
@@ -287,7 +325,7 @@ The `calculate_pheprob()` function implements the Sinnott et al. (2018) binomial
 
 ### Multiple Phenotypes Analysis (Recommended Approach)
 
-For analyzing multiple unrelated conditions, use the new multiple phenotypes mode:
+For analyzing multiple unrelated conditions, use the multiple phenotypes mode:
 
 ```r
 # Define separate phenotypes instead of mixing concepts

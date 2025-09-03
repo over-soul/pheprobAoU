@@ -268,3 +268,165 @@ prepare_pheprob_binomial_data_allofus <- function(concept_ids,
   
   return(result)
 }
+
+
+#' View Expanded Disease Concepts from Hierarchy
+#'
+#' Displays what concepts are included when concept hierarchy expansion is applied
+#' to the provided input concepts. This function helps users understand what
+#' additional concepts are included in their phenotype definitions through the
+#' OMOP concept_ancestor relationships.
+#'
+#' @param concept_ids A numeric vector of OMOP concept IDs to expand
+#' @param include_names Logical indicating whether to include concept names and 
+#'   additional metadata (default: TRUE)
+#' @param include_original Logical indicating whether to include the original 
+#'   concepts in the output (default: TRUE)
+#' @param max_concepts Maximum number of concepts to return (default: NULL for no limit)
+#'
+#' @return A tibble with expanded concept information:
+#'   \item{concept_id}{OMOP concept identifier (descendant)}
+#'   \item{concept_name}{Human-readable concept name (if include_names = TRUE)}
+#'   \item{domain_id}{OMOP domain (if include_names = TRUE)}
+#'   \item{vocabulary_id}{OMOP vocabulary (if include_names = TRUE)}
+#'   \item{concept_class_id}{OMOP concept class (if include_names = TRUE)}
+#'   \item{is_original}{Whether this was one of the input concepts (if include_original = TRUE)}
+#'
+#' @details
+#' This function uses the same concept expansion logic as the main phenotyping
+#' functions in pheprobAoU. It queries the concept_ancestor table to find all
+#' descendant concepts for the provided concept IDs, giving users visibility
+#' into what concepts are actually included in their analyses.
+#' 
+#' The expansion includes:
+#' - All descendant concepts from the OMOP concept hierarchy
+#' - Deduplication of concept mappings
+#' - Optional inclusion of concept names and metadata
+#' - Optional filtering to manageable result sizes
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # View expanded diabetes concepts
+#' diabetes_concepts <- c(201820, 201826, 4193704)
+#' expanded <- view_expanded_concepts(diabetes_concepts)
+#' print(expanded)
+#' 
+#' # View just concept IDs without names (faster)
+#' expanded_ids_only <- view_expanded_concepts(
+#'   diabetes_concepts, 
+#'   include_names = FALSE
+#' )
+#' 
+#' # Limit results to first 100 concepts
+#' expanded_limited <- view_expanded_concepts(
+#'   diabetes_concepts,
+#'   max_concepts = 100
+#' )
+#' }
+view_expanded_concepts <- function(concept_ids,
+                                   include_names = TRUE,
+                                   include_original = TRUE, 
+                                   max_concepts = NULL) {
+  
+  # Input validation
+  if (!is.numeric(concept_ids) || length(concept_ids) == 0) {
+    cli::cli_abort("concept_ids must be a non-empty numeric vector")
+  }
+  
+  if (!is.logical(include_names) || length(include_names) != 1) {
+    cli::cli_abort("include_names must be a single logical value")
+  }
+  
+  if (!is.logical(include_original) || length(include_original) != 1) {
+    cli::cli_abort("include_original must be a single logical value")
+  }
+  
+  if (!is.null(max_concepts) && (!is.numeric(max_concepts) || length(max_concepts) != 1 || max_concepts <= 0)) {
+    cli::cli_abort("max_concepts must be NULL or a positive number")
+  }
+  
+  # Ensure allofus package is available
+  if (!requireNamespace("allofus", quietly = TRUE)) {
+    cli::cli_abort("allofus package is required but not available")
+  }
+  
+  cli::cli_alert_info("Expanding {length(concept_ids)} input concept{?s} using OMOP hierarchy...")
+  
+  tryCatch({
+    # Connect to database
+    con <- allofus::aou_connect()
+    
+    concept_ids_integer <- as.integer(concept_ids)
+    
+    # Get expanded concepts using concept hierarchy
+    concept_ancestor <- dplyr::tbl(con, "concept_ancestor")
+    
+    expanded_concepts <- concept_ancestor %>%
+      dplyr::filter(ancestor_concept_id %in% !!concept_ids_integer) %>%
+      dplyr::distinct(descendant_concept_id) %>%
+      dplyr::collect()
+    
+    cli::cli_alert_info("Found {nrow(expanded_concepts)} expanded concept{?s}")
+    
+    # Optionally include original concepts
+    if (include_original) {
+      # Add original concepts that might not have descendants
+      original_concepts <- tibble::tibble(descendant_concept_id = concept_ids_integer)
+      expanded_concepts <- dplyr::bind_rows(expanded_concepts, original_concepts) %>%
+        dplyr::distinct(descendant_concept_id)
+      
+      cli::cli_alert_info("Including {length(concept_ids)} original concept{?s} in output")
+    }
+    
+    # Apply limit if specified
+    if (!is.null(max_concepts) && nrow(expanded_concepts) > max_concepts) {
+      expanded_concepts <- expanded_concepts %>%
+        dplyr::slice_head(n = max_concepts)
+      cli::cli_alert_warning("Limited output to first {max_concepts} concept{?s}")
+    }
+    
+    # Prepare basic result
+    result <- expanded_concepts %>%
+      dplyr::rename(concept_id = descendant_concept_id)
+    
+    # Optionally add concept names and metadata
+    if (include_names && nrow(result) > 0) {
+      cli::cli_progress_step("Retrieving concept names and metadata...")
+      
+      concept_info <- dplyr::tbl(con, "concept") %>%
+        dplyr::filter(concept_id %in% !!result$concept_id) %>%
+        dplyr::select(concept_id, concept_name, domain_id, vocabulary_id, concept_class_id) %>%
+        dplyr::collect()
+      
+      result <- result %>%
+        dplyr::left_join(concept_info, by = "concept_id") %>%
+        dplyr::mutate(
+          concept_name = ifelse(is.na(.data$concept_name), 
+                               paste("Unknown concept", .data$concept_id), 
+                               .data$concept_name)
+        )
+    }
+    
+    # Add is_original flag if requested
+    if (include_original) {
+      result <- result %>%
+        dplyr::mutate(is_original = .data$concept_id %in% concept_ids_integer)
+    }
+    
+    # Arrange by concept name if available, otherwise by concept_id
+    if (include_names) {
+      result <- result %>% dplyr::arrange(.data$concept_name)
+    } else {
+      result <- result %>% dplyr::arrange(.data$concept_id)
+    }
+    
+    cli::cli_alert_success("Successfully retrieved expanded concept information")
+    
+    return(result)
+    
+  }, error = function(e) {
+    cli::cli_abort("Failed to expand concepts: {e$message}")
+  })
+}
