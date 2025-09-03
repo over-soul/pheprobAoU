@@ -324,6 +324,13 @@ prepare_pheprob_binomial_data_allofus <- function(concept_ids,
 #'   diabetes_concepts,
 #'   max_concepts = 100
 #' )
+#' 
+#' # Combine options: fast and limited for large concept sets
+#' fast_limited <- view_expanded_concepts(
+#'   diabetes_concepts,
+#'   include_names = FALSE,
+#'   max_concepts = 10
+#' )
 #' }
 view_expanded_concepts <- function(concept_ids,
                                    include_names = TRUE,

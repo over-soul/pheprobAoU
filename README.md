@@ -250,6 +250,14 @@ expanded_ids_only <- view_expanded_concepts(
   diabetes_concepts, 
   include_names = FALSE
 )
+head(expanded_ids_only)
+#   concept_id is_original
+#       201820        TRUE
+#       201826        TRUE
+#      4193704        TRUE
+#      4099651       FALSE
+#      4193705       FALSE
+#      4130162       FALSE
 
 # Limit results for overview
 expanded_limited <- view_expanded_concepts(
@@ -257,10 +265,20 @@ expanded_limited <- view_expanded_concepts(
   max_concepts = 50
 )
 
+# Combine options: fast and limited
+fast_limited <- view_expanded_concepts(
+  diabetes_concepts,
+  include_names = FALSE,
+  max_concepts = 10
+)
+
 # Summary statistics
 cat("Original concepts:", length(diabetes_concepts), "\n")
 cat("Expanded concepts:", nrow(expanded), "\n")
 cat("Expansion ratio:", round(nrow(expanded) / length(diabetes_concepts), 1), "x\n")
+#> Original concepts: 3
+#> Expanded concepts: 156
+#> Expansion ratio: 52 x
 ```
 
 ### `extract_total_healthcare_utilization()`

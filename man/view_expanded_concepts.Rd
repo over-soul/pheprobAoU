@@ -14,22 +14,22 @@ view_expanded_concepts(
 \arguments{
 \item{concept_ids}{A numeric vector of OMOP concept IDs to expand}
 
-\item{include_names}{Logical indicating whether to include concept names and 
+\item{include_names}{Logical indicating whether to include concept names and
 additional metadata (default: TRUE)}
 
-\item{include_original}{Logical indicating whether to include the original 
+\item{include_original}{Logical indicating whether to include the original
 concepts in the output (default: TRUE)}
 
 \item{max_concepts}{Maximum number of concepts to return (default: NULL for no limit)}
 }
 \value{
 A tibble with expanded concept information:
-  \item{concept_id}{OMOP concept identifier (descendant)}
-  \item{concept_name}{Human-readable concept name (if include_names = TRUE)}
-  \item{domain_id}{OMOP domain (if include_names = TRUE)}
-  \item{vocabulary_id}{OMOP vocabulary (if include_names = TRUE)}
-  \item{concept_class_id}{OMOP concept class (if include_names = TRUE)}
-  \item{is_original}{Whether this was one of the input concepts (if include_original = TRUE)}
+\item{concept_id}{OMOP concept identifier (descendant)}
+\item{concept_name}{Human-readable concept name (if include_names = TRUE)}
+\item{domain_id}{OMOP domain (if include_names = TRUE)}
+\item{vocabulary_id}{OMOP vocabulary (if include_names = TRUE)}
+\item{concept_class_id}{OMOP concept class (if include_names = TRUE)}
+\item{is_original}{Whether this was one of the input concepts (if include_original = TRUE)}
 }
 \description{
 Displays what concepts are included when concept hierarchy expansion is applied
@@ -44,10 +44,12 @@ descendant concepts for the provided concept IDs, giving users visibility
 into what concepts are actually included in their analyses.
 
 The expansion includes:
-- All descendant concepts from the OMOP concept hierarchy
-- Deduplication of concept mappings
-- Optional inclusion of concept names and metadata
-- Optional filtering to manageable result sizes
+\itemize{
+\item All descendant concepts from the OMOP concept hierarchy
+\item Deduplication of concept mappings
+\item Optional inclusion of concept names and metadata
+\item Optional filtering to manageable result sizes
+}
 }
 \examples{
 \dontrun{
@@ -66,6 +68,13 @@ expanded_ids_only <- view_expanded_concepts(
 expanded_limited <- view_expanded_concepts(
   diabetes_concepts,
   max_concepts = 100
+)
+
+# Combine options: fast and limited for large concept sets
+fast_limited <- view_expanded_concepts(
+  diabetes_concepts,
+  include_names = FALSE,
+  max_concepts = 10
 )
 }
 }
