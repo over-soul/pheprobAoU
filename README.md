@@ -8,15 +8,12 @@ The package provides true phenotype probabilities P(Y=1|S,C) by modeling disease
 
 ## Key Features
 
-- **PheProb Implementation**: Faithful implementation of the binomial mixture model methodology from Sinnott et al. (2018)
-- **True Probabilistic Framework**: Returns P(Y=1|S,C) probabilities, not arbitrary scores
+- **PheProb Implementation**: Implementation of the binomial mixture model methodology from Sinnott et al. (2018)
 - **Direct SQL Approach**: High-performance data extraction using optimized database queries
 - **Concept Hierarchy Expansion**: Automatic expansion using OMOP concept_ancestor relationships
 - **Real Healthcare Utilization**: Counts source-coded conditions for accurate utilization measurement
-- **Healthcare Utilization Adjustment**: Accounts for variable healthcare usage via φ(c) = logistic(α₀ + α₁ × c)  
 - **Multiple Phenotypes Support**: Independent models for multiple unrelated conditions with correlation analysis
 - **Comprehensive Validation**: Data quality assessment, model diagnostics, and clinical coherence validation
-- **Rich Analytics**: Comorbidity analysis, phenotype correlations, and uncertainty quantification
 
 ## Installation
 
@@ -26,11 +23,11 @@ Before installing `pheprobAoU`, ensure you have:
 
 1. **R 4.0.0 or higher**
 2. **All of Us Research Program access** with appropriate data use agreements
-3. **Active All of Us workbench environment** (if running in the cloud)
+3. **Active All of Us workbench environment**
 
 ### Installation Methods
 
-#### From GitHub (Development Version)
+#### From GitHub
 
 ```r
 # Install devtools if you haven't already
@@ -73,11 +70,10 @@ library(pheprobAoU)
 # Define diabetes-related OMOP concept IDs
 diabetes_concepts <- c(
   201826,   # Type 2 diabetes mellitus
-  4329847,  # Diabetes mellitus
-  9201      # Diabetes complication
+  4329847  # Diabetes mellitus
 )
 
-# Calculate PheProb probabilities using Sinnott et al. (2018) methodology (default method)
+# Calculate PheProb probabilities using Sinnott et al. (2018) methodology
 diabetes_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
   progress = TRUE  # Uses binomial mixture model with direct SQL approach
@@ -93,12 +89,11 @@ head(diabetes_scores)
 
 # Check overall results
 summary(diabetes_scores)
-# Shows: ~350K patients, 15-25% diabetes prevalence, realistic code counts
 ```
 
 ### Connection Management
 
-**Important**: Database connections only work within the All of Us Research Workbench environment, not in local development environments.
+**Important**: Database connections only work within the All of Us Research Workbench environment with proper access.
 
 #### In All of Us Environment:
 ```r
@@ -114,22 +109,6 @@ is_aou_connected()
 # Manual connection (if needed)
 connect_aou()
 # ✅ Already connected to All of Us Research Program
-```
-
-#### In Local Environment:
-```r
-library(pheprobAoU)
-# 📊 pheprobAoU: PheProb Implementation for All of Us EHR Data
-# ℹ️  Running in local environment (not All of Us cloud)
-# ℹ️  Database connection only available in All of Us Research Workbench
-# 💡 For local development, use mock data or simulation functions
-
-is_aou_connected()
-# [1] FALSE
-
-connect_aou()
-# ⚠ Not in All of Us Research Workbench environment
-# ℹ Database connection only available within All of Us cloud
 ```
 
 #### Control Auto-Connection:
@@ -156,7 +135,6 @@ research_phenotypes <- list(
 # Calculate separate probabilities for each phenotype
 multi_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = research_phenotypes,
-  method = "original",
   phenotype_correlation_analysis = TRUE
 )
 
@@ -177,15 +155,17 @@ The main function for PheProb calculation with extensive customization options:
 calculate_pheprob(
   concept_ids,                    # Required: OMOP concept IDs
   person_ids = NULL,              # Optional: specific person IDs
-  method = "composite",           # Scoring method
   domains = c("condition", "procedure", "drug", "measurement", "observation"),
   date_range = NULL,              # Temporal filtering
-  weights = NULL,                 # Custom concept weights
-  normalization = "minmax",       # Score normalization
   output_format = "wide",         # Output format
   output_file = NULL,             # Export file
   batch_size = 10000,            # Batch processing size
-  progress = TRUE                 # Progress indicators
+  progress = TRUE,               # Progress indicators
+  max_iterations = 1000,         # EM algorithm max iterations
+  convergence_threshold = 1e-6,  # EM convergence threshold
+  init_method = "random",        # EM initialization method
+  data_validation = TRUE,        # Perform data quality validation
+  model_diagnostics = TRUE       # Include model diagnostics
 )
 ```
 
@@ -204,7 +184,6 @@ phenotypes <- list(
 # Get separate probability for each phenotype using Sinnott et al. (2018) methodology
 multi_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = phenotypes,
-  method = "original",
   phenotype_correlation_analysis = TRUE,
   joint_validation = TRUE
 )
@@ -245,21 +224,23 @@ validation <- validate_phenotype_coherence(phenotypes)
 # Warns about mixed domains and unrelated concepts
 ```
 
-### `extract_ehr_features()`
+### `extract_total_healthcare_utilization()`
 
-Extract raw EHR features for custom analysis:
+Extract total healthcare utilization data for custom analysis:
 
 ```r
-features <- extract_ehr_features(
-  concept_ids = diabetes_concepts,
-  domains = c("condition", "procedure"),
+# Extract total healthcare utilization counts (used internally by PheProb)
+total_utilization <- extract_total_healthcare_utilization(
+  person_ids = NULL,  # All persons
+  domains = c("condition", "procedure", "drug", "measurement", "observation"),
   date_range = list(start = as.Date("2018-01-01"), end = Sys.Date())
 )
 
-# Create custom feature matrix
-feature_matrix <- create_feature_matrix(
-  features, 
-  feature_type = "log_count"
+# Create custom feature matrix for additional analysis
+features <- extract_allofus_pheprob_data(
+  concept_ids = diabetes_concepts,
+  domains = c("condition", "procedure"),
+  expand_concepts = TRUE
 )
 ```
 
@@ -270,26 +251,18 @@ feature_matrix <- create_feature_matrix(
 The package implements the PheProb methodology (Sinnott et al., 2018) using binomial mixture models:
 
 ```r
-# PheProb calculation using Sinnott et al. (2018) methodology (recommended)
+# PheProb calculation using Sinnott et al. (2018) methodology
 diabetes_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "original"  # Default method
+  progress = TRUE
 )
 
 # Access model diagnostics
 summary(diabetes_scores)
-# Shows: model parameters (p₁, p₀, α₀, α₁), convergence, data quality
+# Shows: model parameters, convergence, data quality
 ```
 
 ### Model Components
-
-The PheProb model (Sinnott et al., 2018) consists of:
-
-- **S**: Disease-relevant billing code count
-- **C**: Total healthcare utilization (billing codes)  
-- **Binomial likelihood**: P(S|C,Y) = Binomial(S; C, p_y)
-- **Healthcare utilization effect**: φ(c) = logistic(α₀ + α₁ × c)
-- **Final probability**: P(Y=1|S,C) via Bayes rule
 
 ### Advanced Parameters
 
@@ -297,7 +270,6 @@ The PheProb model (Sinnott et al., 2018) consists of:
 # Advanced usage with custom parameters
 advanced_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "original",
   max_iterations = 1000,
   convergence_threshold = 1e-6,
   init_method = "kmeans",
@@ -306,14 +278,9 @@ advanced_scores <- calculate_pheprob(
 )
 ```
 
-### Deprecated Methods (Legacy Support)
+### Method Note
 
-⚠️ **Note**: The following methods are deprecated and will be removed in a future version. Use the Sinnott et al. (2018) methodology with `method="original"` instead:
-
-```r
-# DEPRECATED - use method="original" (Sinnott et al., 2018) instead
-legacy_scores <- calculate_pheprob(concepts, method = "composite")  # Shows warning
-```
+The `calculate_pheprob()` function implements the Sinnott et al. (2018) binomial mixture model methodology.
 
 ## Real-World Examples
 
@@ -325,15 +292,14 @@ For analyzing multiple unrelated conditions, use the new multiple phenotypes mod
 # Define separate phenotypes instead of mixing concepts
 research_phenotypes <- list(
   type2_diabetes = c(201826, 4329847, 9201, 4193704),
-  cardiovascular = c(314866, 313217, 316866, 4329847),
-  mental_health = c(4152280, 4226263, 436073, 4059317),
-  chronic_kidney = c(4030518, 192359, 4030319, 4030320)
+  cardiovascular = c(4329847, 313217, 442604, 316139),
+  mental_health = c(4152280, 442077, 436665, 436676),
+  chronic_kidney = c(4030518, 192359, 46271022, 443597)
 )
 
 # Calculate separate probabilities using Sinnott et al. (2018) methodology
 multi_phenotype_scores <- calculate_multiple_pheprobs(
   phenotype_concepts = research_phenotypes,
-  method = "original",
   output_format = "wide"
 )
 
@@ -361,16 +327,15 @@ comorbidity_analysis <- multi_phenotype_scores %>%
 ```r
 # Cardiovascular disease concepts
 cvd_concepts <- c(
-  314866,   # Myocardial infarction
+  4329847,   # Myocardial infarction
   313217,   # Atrial fibrillation  
-  316866,   # Hypertensive disease
-  4329847   # Heart failure
+  442604,   # Hypertensive heart disease
+  316139   # Heart failure
 )
 
 # Calculate CVD probabilities using PheProb (Sinnott et al., 2018)
 cvd_scores <- calculate_pheprob(
   concept_ids = cvd_concepts,
-  method = "original",
   domains = c("condition", "procedure", "drug"),
   output_file = "cvd_risk_scores.csv"
 )
@@ -381,20 +346,17 @@ high_risk_patients <- cvd_scores[cvd_scores$pheprob_score > 0.8, ]
 
 ### Mental Health Phenotyping
 
-```r
-# Depression and anxiety concepts  
+```r 
 mental_health_concepts <- c(
   4152280,  # Major depressive disorder
-  4226263,  # Anxiety disorder
-  436073,   # Bipolar disorder
-  4059317   # PTSD
+  442077,  # Anxiety disorder
+  436665,   # Bipolar disorder
+  436676   # PTSD
 )
 
 mental_health_scores <- calculate_pheprob(
   concept_ids = mental_health_concepts,
-  method = "temporal",  # Recent events more important
-  date_range = list(start = as.Date("2019-01-01"), end = Sys.Date()),
-  normalization = "zscore"
+  date_range = list(start = as.Date("2019-01-01"), end = Sys.Date())
 )
 ```
 
@@ -417,63 +379,12 @@ calculate_pheprob(
 
 # Manual export with custom options
 scores <- calculate_pheprob(diabetes_concepts)
-export_features(scores, "custom_results.csv", include_metadata = TRUE)
-```
-
-### Integration with Analysis Workflows
-
-```r
-# Calculate scores and integrate with analysis pipeline
-scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "composite",
-  output_format = "matrix"
-)
-
-# Use with machine learning
-library(randomForest)
-# scores matrix can be used directly as features
-model <- randomForest(outcome ~ ., data = combined_data)
-
-# Use with survival analysis  
-library(survival)
-cox_model <- coxph(Surv(time, event) ~ scores[, 1] + scores[, 2], data = survival_data)
+# Results can be saved manually using base R functions:
+write.csv(scores, "custom_results.csv", row.names = FALSE)
+saveRDS(scores, "custom_results.rds")  # Preserves full object with metadata
 ```
 
 ## Performance and Scalability
-
-### High Performance Data Extraction
-
-The package now uses a direct SQL approach for optimal performance:
-
-```r
-# Process 300,000+ patients efficiently with realistic results
-large_scale_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  expand_concepts = TRUE,  # Uses concept hierarchy for comprehensive phenotyping
-  progress = TRUE          # Monitor progress
-)
-
-# Expected results with new approach:
-# - Sample size: ~350,000 patients (vs previous 39K)
-# - Disease prevalence: 15-25% (vs previous 0%)
-# - Healthcare utilization: 100-1000+ codes per person (vs previous 3)
-# - Realistic probability distributions with proper case/control separation
-```
-
-### Performance Improvements
-
-**Before (v1.0.0):**
-- Data extraction: Limited `aou_concept_set` approach
-- Healthcare utilization: Only visit codes (unrealistic)
-- Cohort: Survey-biased, small samples
-- Results: 0% prevalence, failed model convergence
-
-**After (v1.1.0+):**
-- Data extraction: Direct SQL with concept hierarchy
-- Healthcare utilization: Source-coded conditions (realistic)
-- Cohort: General population, proper case/control mixture
-- Results: 15-25% prevalence, excellent model performance
 
 ### Memory Management
 
@@ -541,24 +452,20 @@ scores <- calculate_pheprob(
 diabetes_concepts <- c(
   201826,   # Type 2 diabetes mellitus (specific)
   4329847,  # Diabetes mellitus (general)
-  9201,     # Diabetes complication (related)
-  4229881   # Diabetic nephropathy (specific complication)
+  4128221   # Microalbuminuric diabetic nephropathy
 )
 ```
 
-### Weight Assignment
+### Concept Expansion
 
-1. **Higher weights for more specific concepts**
-2. **Consider clinical importance**
-3. **Validate weights with domain experts**
+The package automatically handles concept hierarchy expansion through OMOP `concept_ancestor` relationships:
 
 ```r
-# Evidence-based weighting
-weights <- c(
-  "201826" = 2.0,   # Specific diagnosis
-  "4329847" = 1.0,  # General diagnosis  
-  "9201" = 1.5,     # Complication
-  "4229881" = 2.5   # Specific severe complication
+# The package automatically expands concept hierarchies
+diabetes_scores <- calculate_pheprob(
+  concept_ids = c(201826, 4329847, 4128221),  # Parent concepts
+  # Automatically includes descendant concepts through concept_ancestor table
+  progress = TRUE
 )
 ```
 
@@ -568,14 +475,12 @@ weights <- c(
 # Focus on recent events for active conditions
 recent_scores <- calculate_pheprob(
   concept_ids = diabetes_concepts,
-  method = "temporal",
   date_range = list(start = as.Date("2020-01-01"), end = Sys.Date())
 )
 
 # Use full history for lifetime conditions
 lifetime_scores <- calculate_pheprob(
-  concept_ids = diabetes_concepts,
-  method = "composite"
+  concept_ids = diabetes_concepts
   # No date_range = use all available data
 )
 ```
@@ -596,27 +501,6 @@ Sinnott, J. A., Cai, F., Yu, S., Hejblum, B. P., Hong, C., Kohane, I. S., & Liao
 PheProb: probabilistic phenotyping using diagnosis codes to improve power for genetic 
 association studies. Journal of the American Medical Informatics Association : JAMIA, 
 25(10), 1359–1365. https://doi.org/10.1093/jamia/ocy056
-```
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```r
-# Clone the repository
-git clone https://github.com/over-soul/pheprobAoU.git
-cd pheprobAoU
-
-# Install development dependencies
-devtools::install_dev_deps()
-
-# Run tests
-devtools::test()
-
-# Check package
-devtools::check()
 ```
 
 ## License
