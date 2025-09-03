@@ -7,26 +7,26 @@ test_that("calculate_multiple_pheprobs validates input correctly", {
   
   # Test non-list input
   expect_error(
-    calculate_multiple_pheprobs(c(201826, 4329847)),
+    calculate_multiple_pheprobs(c(201820, 201826, 4193704)),
     "phenotype_concepts must be a list"
   )
   
   # Test unnamed list
   expect_error(
-    calculate_multiple_pheprobs(list(c(201826, 4329847), c(314866, 313217))),
+    calculate_multiple_pheprobs(list(c(201820, 201826, 4193704), c(4329847, 313217, 442604, 316139))),
     "All elements in phenotype_concepts must be named"
   )
   
   # Test invalid phenotype names
   expect_error(
-    calculate_multiple_pheprobs(list("invalid name!" = c(201826, 4329847))),
+    calculate_multiple_pheprobs(list("invalid name!" = c(201820, 201826, 4193704))),
     "Invalid phenotype names"
   )
   
   # Test invalid output format
   expect_error(
     calculate_multiple_pheprobs(
-      list(diabetes = c(201826, 4329847)), 
+      list(diabetes = c(201820, 201826, 4193704)), 
       output_format = "invalid"
     ),
     "Invalid output_format"
@@ -36,8 +36,8 @@ test_that("calculate_multiple_pheprobs validates input correctly", {
 test_that("calculate_multiple_pheprobs handles valid input structure", {
   # Create valid phenotype input
   phenotypes <- list(
-    diabetes = c(201826, 4329847),
-    cvd = c(314866, 313217)
+    diabetes = c(201820, 201826, 4193704),
+    cvd = c(4329847, 313217, 442604, 316139)
   )
   
   # This will fail without database connection, but we can test input validation
@@ -50,13 +50,13 @@ test_that("calculate_multiple_pheprobs handles valid input structure", {
 
 test_that("calculate_multiple_pheprobs handles phenotype weights correctly", {
   phenotypes <- list(
-    diabetes = c(201826, 4329847),
-    cvd = c(314866, 313217)
+    diabetes = c(201820, 201826, 4193704),
+    cvd = c(4329847, 313217, 442604, 316139)
   )
   
   phenotype_weights <- list(
-    diabetes = c("201826" = 2.0, "4329847" = 1.5),
-    cvd = c("314866" = 3.0, "313217" = 2.0)
+    diabetes = c("201820" = 2.0, "201826" = 1.5, "4193704" = 1.8),
+    cvd = c("4329847" = 3.0, "313217" = 2.0, "442604" = 2.5, "316139" = 2.2)
   )
   
   # Test that weights structure is accepted (will fail at database level)
@@ -72,21 +72,21 @@ test_that("calculate_multiple_pheprobs handles phenotype weights correctly", {
 test_that("validate_phenotype_coherence validates input correctly", {
   # Test non-list input
   expect_error(
-    validate_phenotype_coherence(c(201826, 4329847)),
+    validate_phenotype_coherence(c(201820, 201826, 4193704)),
     "phenotype_concepts must be a named list"
   )
   
   # Test unnamed list
   expect_error(
-    validate_phenotype_coherence(list(c(201826, 4329847))),
+    validate_phenotype_coherence(list(c(201820, 201826, 4193704))),
     "phenotype_concepts must be a named list"
   )
 })
 
 test_that("validate_phenotype_coherence handles valid input", {
   phenotypes <- list(
-    diabetes = c(201826, 4329847),
-    cvd = c(314866, 313217)
+    diabetes = c(201820, 201826, 4193704),
+    cvd = c(4329847, 313217, 442604, 316139)
   )
   
   # This will process validation but fail at database level
@@ -99,8 +99,8 @@ test_that("validate_phenotype_coherence handles valid input", {
 test_that("phenotype name validation works correctly", {
   # Valid names
   valid_phenotypes <- list(
-    diabetes = c(201826),
-    cvd_risk = c(314866),
+    diabetes = c(201820),
+    cvd_risk = c(4329847),
     mental_health2 = c(432870)
   )
   
@@ -112,7 +112,7 @@ test_that("phenotype name validation works correctly", {
   
   # Invalid names with spaces
   invalid_phenotypes1 <- list(
-    "diabetes mellitus" = c(201826)
+    "diabetes mellitus" = c(201820)
   )
   
   expect_error(
@@ -122,7 +122,7 @@ test_that("phenotype name validation works correctly", {
   
   # Invalid names starting with numbers
   invalid_phenotypes2 <- list(
-    "2diabetes" = c(201826)
+    "2diabetes" = c(201820)
   )
   
   expect_error(
@@ -132,7 +132,7 @@ test_that("phenotype name validation works correctly", {
   
   # Invalid names with special characters
   invalid_phenotypes3 <- list(
-    "diabetes-mellitus" = c(201826)
+    "diabetes-mellitus" = c(201820)
   )
   
   expect_error(
@@ -147,7 +147,7 @@ test_that("multiple phenotypes output format works correctly", {
   # by creating mock results and testing the formatting functions
   
   # Test that output format validation works
-  phenotypes <- list(diabetes = c(201826), cvd = c(314866))
+  phenotypes <- list(diabetes = c(201820), cvd = c(4329847))
   
   # Wide format (default)
   expect_error(
@@ -170,13 +170,13 @@ test_that("multiple phenotypes output format works correctly", {
 
 test_that("phenotype weights structure validation", {
   phenotypes <- list(
-    diabetes = c(201826, 4329847),
-    cvd = c(314866, 313217)
+    diabetes = c(201820, 201826, 4193704),
+    cvd = c(4329847, 313217, 442604, 316139)
   )
   
   # Valid weights structure
   valid_weights <- list(
-    diabetes = c("201826" = 2.0, "4329847" = 1.5)
+    diabetes = c("201820" = 2.0, "201826" = 1.5, "4193704" = 1.8)
   )
   
   expect_error(
@@ -190,7 +190,7 @@ test_that("phenotype weights structure validation", {
   
   # Partial weights (should be fine)
   partial_weights <- list(
-    diabetes = c("201826" = 2.0)  # Only one concept weighted
+    diabetes = c("201820" = 2.0)  # Only one concept weighted
   )
   
   expect_error(
@@ -208,7 +208,7 @@ test_that("error handling preserves structure", {
   # This tests the tryCatch logic in the main function
   
   phenotypes <- list(
-    valid_diabetes = c(201826, 4329847),
+    valid_diabetes = c(201820, 201826, 4193704),
     invalid_phenotype = c(999999999)  # Invalid concept ID
   )
   
@@ -223,7 +223,7 @@ test_that("error handling preserves structure", {
 test_that("coherence validation settings work", {
   phenotypes <- list(
     diabetes = c(201826, 4329847),
-    mixed = c(201826, 313217, 432870)  # Mixed domains
+    mixed = c(201820, 313217, 432870)  # Mixed domains
   )
   
   # Test with domain checking disabled

@@ -19,6 +19,7 @@ calculate_pheprob_method(
   exclude_concepts = NULL,
   data_validation = TRUE,
   model_diagnostics = TRUE,
+  check_concept_existence = FALSE,
   ...
 )
 }
@@ -51,6 +52,8 @@ the temporal scope of data extraction.}
 \item{data_validation}{Logical indicating whether to perform data quality validation}
 
 \item{model_diagnostics}{Logical indicating whether to include model diagnostics}
+
+\item{check_concept_existence}{Logical indicating whether to validate concept IDs exist in database (default: FALSE)}
 
 \item{...}{Additional arguments}
 }

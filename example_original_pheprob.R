@@ -17,7 +17,7 @@ library(pheprobAoU)
 cat("=== EXAMPLE 1: Basic PheProb ===\n\n")
 
 # Define diabetes-related concepts
-diabetes_concepts <- c(201826, 4329847, 9201)
+diabetes_concepts <- c(201820, 201826, 4193704)
 
 # Calculate phenotype probabilities using the new direct SQL approach
 diabetes_scores <- calculate_pheprob(
@@ -179,9 +179,9 @@ cat("Multiple phenotype analysis would work like this:\n")
 cat("\n")
 cat("# Define separate phenotypes\n")
 cat("phenotypes <- list(\n")
-cat("  diabetes = c(201826, 4329847, 9201),\n")
-cat("  cardiovascular = c(314866, 313217, 316866),\n") 
-cat("  mental_health = c(4152280, 4226263, 436073)\n")
+cat("  diabetes = c(201820, 201826, 4193704),\n")
+cat("  cardiovascular = c(4329847, 313217, 442604, 316139),\n") 
+cat("  mental_health = c(4152280, 442077, 436665, 436676)\n")
 cat(")\n\n")
 cat("# Calculate separate probabilities\n")
 cat("multi_scores <- calculate_multiple_pheprobs(\n")

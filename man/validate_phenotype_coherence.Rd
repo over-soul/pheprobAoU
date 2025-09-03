@@ -27,8 +27,8 @@ Validates that phenotype concept definitions are coherent and well-formed.
 \examples{
 \dontrun{
 phenotypes <- list(
-  diabetes = c(201826, 4329847),
-  cvd = c(314866, 313217)
+  diabetes = c(201820, 201826, 4193704),
+  cvd = c(4329847, 313217, 442604, 316139)
 )
 validated <- validate_phenotype_coherence(phenotypes)
 }

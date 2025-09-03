@@ -31,7 +31,7 @@ PheProb calculations.
 }
 \examples{
 \dontrun{
-features <- extract_ehr_features(c(201826, 4329847))
+features <- extract_ehr_features(c(201820, 201826, 4193704))
 feature_matrix <- create_feature_matrix(features, feature_type = "binary")
 }
 }

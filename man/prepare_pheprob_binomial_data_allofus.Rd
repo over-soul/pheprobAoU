@@ -2,7 +2,7 @@
 % Please edit documentation in R/allofus_data_extraction.R
 \name{prepare_pheprob_binomial_data_allofus}
 \alias{prepare_pheprob_binomial_data_allofus}
-\title{Replace Original Data Extraction Function}
+\title{Prepare PheProb Data Using AllofUs Functions}
 \usage{
 prepare_pheprob_binomial_data_allofus(
   concept_ids,
@@ -17,13 +17,15 @@ prepare_pheprob_binomial_data_allofus(
 \arguments{
 \item{concept_ids}{A numeric vector of disease-relevant OMOP concept IDs}
 
-\item{person_ids}{A numeric vector of person IDs. If NULL, includes all available persons.}
+\item{person_ids}{A numeric vector of person IDs. If NULL, uses general population.}
 
 \item{domains}{A character vector specifying which OMOP domains to include.
-Default: c("condition_occurrence", "procedure_occurrence", "drug_exposure", "measurement", "observation")}
+Currently focuses on condition_occurrence domain for optimal performance.}
 
 \item{date_range}{A list with 'start' and 'end' dates (Date objects) to limit
 the temporal scope of data extraction. If NULL, no date filtering is applied.}
+
+\item{exclude_concepts}{Concepts to exclude (currently ignored)}
 
 \item{max_persons}{Maximum number of persons to process (for testing/limiting).
 If NULL, processes all available persons.}
@@ -32,7 +34,7 @@ If NULL, processes all available persons.}
 Tibble formatted for binomial mixture model
 }
 \description{
-This function replaces the original prepare_pheprob_binomial_data function
-to use the proper allofus approach.
+This function replaces the original manual BigQuery approach
+with proper allofus package functions.
 }
 \keyword{internal}

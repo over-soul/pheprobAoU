@@ -180,7 +180,7 @@ extract_total_healthcare_utilization <- function(person_ids = NULL,
 #' @examples
 #' \dontrun{
 #' # Prepare data for diabetes phenotyping
-#' diabetes_concepts <- c(201826, 4329847, 9201)
+#' diabetes_concepts <- c(201820, 201826, 4193704)
 #' pheprob_data <- prepare_pheprob_binomial_data(diabetes_concepts)
 #' 
 #' # Check data quality
@@ -683,7 +683,7 @@ add_concept_names <- function(features_data) {
 #'
 #' @examples
 #' \dontrun{
-#' features <- extract_ehr_features(c(201826, 4329847))
+#' features <- extract_ehr_features(c(201820, 201826, 4193704))
 #' feature_matrix <- create_feature_matrix(features, feature_type = "binary")
 #' }
 create_feature_matrix <- function(features_data, feature_type = "binary", fill_missing = 0) {
@@ -745,7 +745,7 @@ create_feature_matrix <- function(features_data, feature_type = "binary", fill_m
 #'
 #' @examples
 #' \dontrun{
-#' features <- extract_ehr_features(c(201826, 4329847))
+#' features <- extract_ehr_features(c(201820, 201826, 4193704))
 #' export_features(features, "my_features.csv")
 #' }
 export_features <- function(data, output_file, include_metadata = TRUE) {

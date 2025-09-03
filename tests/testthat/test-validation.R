@@ -1,6 +1,6 @@
 test_that("validate_concept_ids handles basic validation correctly", {
   # Test valid concept IDs
-  valid_ids <- c(201826, 4329847, 9201)
+  valid_ids <- c(201820, 201826, 4193704)
   
   # Mock validation without database check
   result <- validate_concept_ids(valid_ids, check_existence = FALSE)
@@ -61,7 +61,7 @@ test_that("validate_person_ids handles valid inputs", {
 
 test_that("validate_parameters combines validations correctly", {
   # Test basic parameter validation
-  concept_ids <- c(201826, 4329847)
+  concept_ids <- c(201820, 201826, 4193704)
   
   # This will fail without database connection, but we can test error handling
   expect_error(
@@ -72,7 +72,7 @@ test_that("validate_parameters combines validations correctly", {
 })
 
 test_that("validate_parameters handles output file validation", {
-  concept_ids <- c(201826, 4329847)
+  concept_ids <- c(201820, 201826, 4193704)
   
   # Test invalid output file
   expect_error(

@@ -26,7 +26,7 @@ database and are of the correct format.
 \examples{
 \dontrun{
 # Validate concept IDs
-concept_ids <- c(201826, 4329847, 9999999)  # Last one is invalid
+concept_ids <- c(201820, 201826, 9999999)  # Last one is invalid
 validation_result <- validate_concept_ids(concept_ids)
 print(validation_result$summary)
 }

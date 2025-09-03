@@ -43,7 +43,7 @@
 #' @examples
 #' \dontrun{
 #' # Extract data for diabetes phenotyping
-#' diabetes_concepts <- c(201826, 4329847, 9201)
+#' diabetes_concepts <- c(201820, 201826, 4193704)
 #' pheprob_data <- extract_allofus_pheprob_data(diabetes_concepts)
 #' }
 extract_allofus_pheprob_data <- function(concept_ids,

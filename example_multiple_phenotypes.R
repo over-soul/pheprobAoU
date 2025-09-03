@@ -14,9 +14,9 @@ cat("=== MULTIPLE PHENOTYPES: PHEPROB METHOD (SINNOTT ET AL., 2018) ===\n\n")
 
 # Define separate, clinically coherent phenotypes
 research_phenotypes <- list(
-  diabetes = c(201826, 4329847, 9201, 4193704),           # Diabetes concepts
-  cardiovascular = c(314866, 313217, 316866, 4329847),    # CVD concepts
-  mental_health = c(4152280, 4226263, 436073, 4059317),   # Mental health concepts
+  diabetes = c(201820, 201826, 4193704),           # Diabetes concepts
+  cardiovascular = c(4329847, 313217, 442604, 316139),    # CVD concepts
+  mental_health = c(4152280, 442077, 436665, 436676),   # Mental health concepts
   kidney_disease = c(4030518, 192359, 4030319, 4030320)   # CKD concepts
 )
 
@@ -181,15 +181,15 @@ if (!is.null(joint_validation)) {
 cat("\n=== COMPARISON: OLD vs NEW APPROACH ===\n\n")
 
 cat("❌ OLD APPROACH (Problematic):\n")
-cat("mixed_concepts <- c(201826, 313217, 432870, 4030518)  # Mixing diabetes, CVD, mental health, kidney\n")
+cat("mixed_concepts <- c(201820, 313217, 432870, 4030518)  # Mixing diabetes, CVD, mental health, kidney\n")
 cat("mixed_scores <- calculate_pheprob(mixed_concepts)      # Single meaningless score\n")
 cat("# Result: pheprob_score = 0.73  ← What does this mean??\n\n")
 
 cat("✅ NEW APPROACH (Correct):\n")
 cat("phenotypes <- list(\n")
-cat("  diabetes = c(201826, 4329847),\n")
-cat("  cardiovascular = c(313217, 316866),\n")
-cat("  mental_health = c(432870, 436073),\n")
+cat("  diabetes = c(201820, 201826, 4193704),\n")
+cat("  cardiovascular = c(4329847, 313217, 442604, 316139),\n")
+cat("  mental_health = c(4152280, 442077, 436665, 436676),\n")
 cat("  kidney_disease = c(4030518, 4030319)\n")
 cat(")\n")
 cat("multi_scores <- calculate_multiple_pheprobs(phenotypes)\n")

@@ -13,19 +13,19 @@ test_that("calculate_pheprob validates inputs correctly", {
   
   # Test invalid method
   expect_error(
-    calculate_pheprob(c(201826), method = "invalid_method"),
+    calculate_pheprob(c(201820), method = "invalid_method"),
     "Invalid method"
   )
   
   # Test invalid normalization
   expect_error(
-    calculate_pheprob(c(201826), normalization = "invalid_norm"),
+    calculate_pheprob(c(201820), normalization = "invalid_norm"),
     "Invalid normalization"
   )
   
   # Test invalid output_format
   expect_error(
-    calculate_pheprob(c(201826), output_format = "invalid_format"),
+    calculate_pheprob(c(201820), output_format = "invalid_format"),
     "Invalid output_format"
   )
 })
@@ -121,8 +121,8 @@ test_that("SQL injection protection works", {
 test_that("validate_phenotype_coherence works correctly", {
   # Valid phenotype list
   valid_phenotypes <- list(
-    diabetes = c(201826, 4329847),
-    cvd = c(314866, 313217)
+    diabetes = c(201820, 201826, 4193704),
+    cvd = c(4329847, 313217, 442604, 316139)
   )
   
   # This will fail due to database connection, but we can test structure
@@ -133,7 +133,7 @@ test_that("validate_phenotype_coherence works correctly", {
   
   # Invalid phenotype names
   invalid_phenotypes <- list(
-    "invalid name!" = c(201826)
+    "invalid name!" = c(201820)
   )
   
   expect_error(

@@ -80,9 +80,9 @@ binomial mixture models. Each phenotype gets its own probability score.
 \dontrun{
 # Define multiple phenotypes
 phenotypes <- list(
-  diabetes = c(201826, 4329847, 9201),
-  cvd = c(314866, 313217, 316866),
-  depression = c(4152280, 4226263)
+  diabetes = c(201820, 201826, 4193704),
+  cvd = c(4329847, 313217, 442604, 316139),
+  depression = c(4152280, 442077)
 )
 
 # Calculate separate probabilities for each phenotype

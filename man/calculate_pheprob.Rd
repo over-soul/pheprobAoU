@@ -19,6 +19,7 @@ calculate_pheprob(
   exclude_concepts = NULL,
   data_validation = TRUE,
   model_diagnostics = TRUE,
+  check_concept_existence = FALSE,
   ...
 )
 }
@@ -62,6 +63,8 @@ file extension (.csv, .rds).}
 
 \item{model_diagnostics}{Logical indicating whether to include model diagnostics (default: TRUE)}
 
+\item{check_concept_existence}{Logical indicating whether to validate concept IDs exist in database (default: FALSE)}
+
 \item{...}{Additional arguments}
 }
 \value{
@@ -84,7 +87,7 @@ relevant code count and C is total healthcare utilization.
 \examples{
 \dontrun{
 # Basic diabetes phenotyping using condition concepts
-diabetes_concepts <- c(201826, 4329847, 9201)  # Type 2 diabetes concepts
+diabetes_concepts <- c(201820, 201826, 4193704)  # Diabetes concepts
 
 # Calculate phenotype probabilities
 diabetes_scores <- calculate_pheprob(

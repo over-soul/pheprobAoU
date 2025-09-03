@@ -21,7 +21,7 @@ Exports extracted features or feature matrix to various file formats.
 }
 \examples{
 \dontrun{
-features <- extract_ehr_features(c(201826, 4329847))
+features <- extract_ehr_features(c(201820, 201826, 4193704))
 export_features(features, "my_features.csv")
 }
 }

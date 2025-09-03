@@ -17,15 +17,16 @@ extract_allofus_pheprob_data(
 \arguments{
 \item{concept_ids}{A numeric vector of disease-relevant OMOP concept IDs}
 
-\item{person_ids}{A numeric vector of person IDs. If NULL, includes all available persons.}
+\item{person_ids}{A numeric vector of person IDs. If NULL, uses general population.}
 
 \item{domains}{A character vector specifying which OMOP domains to include.
-Default: c("condition_occurrence", "procedure_occurrence", "drug_exposure", "measurement", "observation")}
+Currently focuses on condition_occurrence domain for optimal performance.}
 
 \item{date_range}{A list with 'start' and 'end' dates (Date objects) to limit
 the temporal scope of data extraction. If NULL, no date filtering is applied.}
 
-\item{expand_concepts}{Logical indicating whether to expand concept hierarchies using concept_ancestor}
+\item{expand_concepts}{Logical indicating whether to expand concept hierarchies
+using concept_ancestor table (default: TRUE).}
 
 \item{max_persons}{Maximum number of persons to process (for testing/limiting).
 If NULL, processes all available persons.}
@@ -33,23 +34,39 @@ If NULL, processes all available persons.}
 \value{
 A tibble with columns required for binomial mixture model:
 \item{person_id}{Person identifier}
-\item{S}{Disease-relevant code count}
-\item{C}{Total healthcare code count}
+\item{S}{Disease-relevant code count (using concept hierarchy)}
+\item{C}{Total healthcare code count (source-coded conditions)}
 \item{success_rate}{S/C ratio}
 }
 \description{
 This file contains functions that properly use the allofus package
 for data extraction, replacing the raw SQL approach.
-Extract Healthcare Utilization Using AllofUs Package
+Extract Healthcare Utilization Using Direct SQL Approach
 }
 \details{
-Extracts total healthcare utilization and disease-relevant counts using
-proper allofus package functions and dbplyr remote computation.
+Extracts disease-relevant counts and total healthcare utilization using
+direct SQL queries with concept hierarchy expansion and proper healthcare utilization.
+This approach fixes critical issues with the previous aou_concept_set method.
+
+This function uses direct SQL queries to extract:
+\itemize{
+\item S: Disease-relevant billing code count (using concept hierarchy)
+\item C: Total healthcare utilization (source-coded conditions)
+\item Proper case/control mixture from general population
+}
+
+Key improvements over previous approach:
+\itemize{
+\item Uses concept_ancestor for comprehensive phenotype expansion
+\item Counts source-coded conditions for realistic healthcare utilization
+\item Uses general population instead of survey-biased cohorts
+\item Handles integer64 data types properly
+}
 }
 \examples{
 \dontrun{
 # Extract data for diabetes phenotyping
-diabetes_concepts <- c(201826, 4329847, 9201)
+diabetes_concepts <- c(201820, 201826, 4193704)
 pheprob_data <- extract_allofus_pheprob_data(diabetes_concepts)
 }
 }

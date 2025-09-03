@@ -47,7 +47,7 @@ binomial mixture model.
 \examples{
 \dontrun{
 # Prepare data for diabetes phenotyping
-diabetes_concepts <- c(201826, 4329847, 9201)
+diabetes_concepts <- c(201820, 201826, 4193704)
 pheprob_data <- prepare_pheprob_binomial_data(diabetes_concepts)
 
 # Check data quality
