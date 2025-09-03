@@ -69,8 +69,9 @@ library(pheprobAoU)
 
 # Define diabetes-related OMOP concept IDs
 diabetes_concepts <- c(
-  201826,   # Type 2 diabetes mellitus
-  4329847  # Diabetes mellitus
+  201820, # Diabetes mellitus
+  201826, # Type 2 diabetes mellitus
+  4193704 # Type 2 diabetes mellitus without complication
 )
 
 # Calculate PheProb probabilities using Sinnott et al. (2018) methodology
@@ -126,7 +127,7 @@ options(pheprobAoU.auto_connect = TRUE)
 ```r
 # Define separate phenotypes (avoids meaningless mixing)
 research_phenotypes <- list(
-  diabetes = c(201826, 4329847, 9201),
+  diabetes = c(201820, 201826, 4193704),
   cardiovascular = c(314866, 313217, 316866),
   mental_health = c(4152280, 4226263, 436073),
   kidney_disease = c(4030518, 192359, 4030319)
@@ -176,7 +177,7 @@ Calculate separate PheProb probabilities for multiple unrelated phenotypes using
 ```r
 # Define multiple phenotypes (avoids meaningless mixing of unrelated concepts)
 phenotypes <- list(
-  diabetes = c(201826, 4329847, 9201),
+  diabetes = c(201820, 201826, 4193704),
   cardiovascular = c(314866, 313217, 316866),
   mental_health = c(4152280, 4226263)
 )
@@ -216,7 +217,7 @@ print(validation_result$summary)
 
 ```r
 phenotypes <- list(
-  diabetes = c(201826, 4329847, 9201),
+  diabetes = c(201820, 201826, 4193704),
   mixed_concepts = c(201826, 313217, 432870)  # Problematic mixing
 )
 
@@ -291,7 +292,7 @@ For analyzing multiple unrelated conditions, use the new multiple phenotypes mod
 ```r
 # Define separate phenotypes instead of mixing concepts
 research_phenotypes <- list(
-  type2_diabetes = c(201826, 4329847, 9201, 4193704),
+  type2_diabetes = c(201826, 4193704, 40482801, 4099651),
   cardiovascular = c(4329847, 313217, 442604, 316139),
   mental_health = c(4152280, 442077, 436665, 436676),
   chronic_kidney = c(4030518, 192359, 46271022, 443597)
