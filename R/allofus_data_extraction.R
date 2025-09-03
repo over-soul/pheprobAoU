@@ -107,6 +107,7 @@ extract_allofus_pheprob_data <- function(concept_ids,
     
     disease_concepts_expanded <- concept_ancestor %>%
       dplyr::filter(ancestor_concept_id %in% !!concept_ids_integer) %>%
+      dplyr::distinct(descendant_concept_id) %>%  # Remove duplicate concept mappings
       dplyr::transmute(condition_concept_id = descendant_concept_id)
     
     expanded_count <- disease_concepts_expanded %>% 
@@ -115,9 +116,10 @@ extract_allofus_pheprob_data <- function(concept_ids,
       dplyr::pull(n)
     cli::cli_alert_info("Expanded to {as.character(expanded_count)} related concepts")
   } else {
-    # Use only the provided concepts
-    disease_concepts_expanded <- dplyr::tibble(condition_concept_id = concept_ids_integer) %>%
-      dplyr::copy_to(con, ., name = "temp_disease_concepts", temporary = TRUE)
+    # Use only the provided concepts (avoid temporary tables for BigQuery compatibility)
+    disease_concepts_expanded <- dplyr::tbl(con, sql(
+      paste0("SELECT UNNEST([", paste(concept_ids_integer, collapse = ", "), "]) as condition_concept_id")
+    ))
     cli::cli_alert_info("Using {length(concept_ids)} provided concepts without expansion")
   }
   
@@ -191,6 +193,28 @@ extract_allofus_pheprob_data <- function(concept_ids,
   
   if (nrow(pheprob_data) == 0) {
     cli::cli_abort("No healthcare utilization data found")
+  }
+  
+  # Step 6: Validate data constraints (should be clean with duplicate removal)
+  cli::cli_progress_step("Validating data constraints...")
+  
+  # Check S <= C constraint (should be satisfied with DISTINCT fix)
+  violations <- sum(pheprob_data$S > pheprob_data$C)
+  if (violations > 0) {
+    cli::cli_alert_warning("Found {violations} patients where S > C. This is unexpected with duplicate removal.")
+    cli::cli_alert_info("Setting S = C for these cases as a safety measure.")
+    
+    # Fix any remaining constraint violations
+    violation_indices <- which(pheprob_data$S > pheprob_data$C)
+    pheprob_data$S[violation_indices] <- pheprob_data$C[violation_indices]
+    
+    # Recalculate success rate after fixing violations
+    pheprob_data$success_rate <- dplyr::case_when(
+      pheprob_data$C > 0 ~ pheprob_data$S / pheprob_data$C,
+      TRUE ~ 0.0
+    )
+  } else {
+    cli::cli_alert_success("Data constraints satisfied: S <= C for all patients")
   }
   
   # Final summary

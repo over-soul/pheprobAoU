@@ -30,6 +30,7 @@
 #' @param exclude_concepts Concept IDs to exclude from total healthcare utilization counts
 #' @param data_validation Logical indicating whether to perform data quality validation (default: TRUE)
 #' @param model_diagnostics Logical indicating whether to include model diagnostics (default: TRUE)
+#' @param check_concept_existence Logical indicating whether to validate concept IDs exist in database (default: FALSE)
 #' @param ... Additional arguments
 #'
 #' @return A tibble with class "pheprob_results" containing:
@@ -81,6 +82,7 @@ calculate_pheprob <- function(concept_ids,
                              exclude_concepts = NULL,
                              data_validation = TRUE,
                              model_diagnostics = TRUE,
+                             check_concept_existence = FALSE,
                              ...) {
   
   # Call the binomial mixture model implementation directly
@@ -99,6 +101,7 @@ calculate_pheprob <- function(concept_ids,
     exclude_concepts = exclude_concepts,
     data_validation = data_validation,
     model_diagnostics = model_diagnostics,
+    check_concept_existence = check_concept_existence,
     ...
   ))
 }

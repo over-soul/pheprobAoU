@@ -4,13 +4,13 @@
 \alias{validate_concept_ids}
 \title{Validate OMOP Concept IDs}
 \usage{
-validate_concept_ids(concept_ids, check_existence = TRUE)
+validate_concept_ids(concept_ids, check_existence = FALSE)
 }
 \arguments{
 \item{concept_ids}{A numeric vector of OMOP concept IDs to validate}
 
 \item{check_existence}{Logical, whether to check if concept IDs exist in the
-All of Us database (default: TRUE). Requires active database connection.}
+All of Us database (default: FALSE). When TRUE, requires active database connection.}
 }
 \value{
 A list containing:

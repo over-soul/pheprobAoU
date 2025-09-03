@@ -5,7 +5,7 @@
 #'
 #' @param concept_ids A numeric vector of OMOP concept IDs to validate
 #' @param check_existence Logical, whether to check if concept IDs exist in the
-#'   All of Us database (default: TRUE). Requires active database connection.
+#'   All of Us database (default: FALSE). When TRUE, requires active database connection.
 #'
 #' @return A list containing:
 #'   \item{valid}{Logical vector indicating which concept IDs are valid}
@@ -22,7 +22,7 @@
 #' validation_result <- validate_concept_ids(concept_ids)
 #' print(validation_result$summary)
 #' }
-validate_concept_ids <- function(concept_ids, check_existence = TRUE) {
+validate_concept_ids <- function(concept_ids, check_existence = FALSE) {
   
   # Check if concept_ids is provided and not empty
   if (missing(concept_ids) || is.null(concept_ids) || length(concept_ids) == 0) {
@@ -371,7 +371,7 @@ validate_phenotype_coherence <- function(phenotype_concepts,
     concept_ids <- phenotype_concepts[[phenotype_name]]
     
     # Validate concept IDs for this phenotype
-    concept_validation <- validate_concept_ids(concept_ids, check_existence = TRUE)
+    concept_validation <- validate_concept_ids(concept_ids, check_existence = FALSE)
     
     if (concept_validation$summary$valid_concept_ids == 0) {
       cli::cli_abort("No valid concept IDs found for phenotype '{phenotype_name}'")

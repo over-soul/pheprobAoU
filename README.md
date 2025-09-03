@@ -225,7 +225,7 @@ Validate OMOP concept IDs before analysis:
 ```r
 validation_result <- validate_concept_ids(
   concept_ids = c(201826, 4329847, 9999999),  # Include invalid ID
-  check_existence = TRUE
+  check_existence = TRUE  # Optional: enable database existence checking
 )
 
 print(validation_result$summary)

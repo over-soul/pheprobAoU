@@ -28,6 +28,7 @@ NULL
 #' @param exclude_concepts Concept IDs to exclude from total healthcare utilization counts
 #' @param data_validation Logical indicating whether to perform data quality validation
 #' @param model_diagnostics Logical indicating whether to include model diagnostics
+#' @param check_concept_existence Logical indicating whether to validate concept IDs exist in database (default: FALSE)
 #' @param ... Additional arguments
 #'
 #' @return A tibble with class "pheprob_single" containing phenotype probabilities
@@ -48,6 +49,7 @@ calculate_pheprob_method <- function(concept_ids,
                                             exclude_concepts = NULL,
                                             data_validation = TRUE,
                                             model_diagnostics = TRUE,
+                                            check_concept_existence = FALSE,
                                             ...) {
   
   start_time <- Sys.time()
@@ -55,7 +57,7 @@ calculate_pheprob_method <- function(concept_ids,
   # Input validation
   if (progress) cli::cli_progress_step("Validating inputs...")
   
-  concept_validation <- validate_concept_ids(concept_ids)
+  concept_validation <- validate_concept_ids(concept_ids, check_existence = check_concept_existence)
   validated_concept_ids <- concept_validation$validated_concept_ids
   
   person_validation <- validate_person_ids(person_ids)
