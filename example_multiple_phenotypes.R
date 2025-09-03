@@ -27,13 +27,17 @@ for (phenotype_name in names(research_phenotypes)) {
 }
 cat("\n")
 
-# Calculate multiple phenotype probabilities
+# Calculate multiple phenotype probabilities with concept hierarchy expansion
 multi_results <- calculate_multiple_pheprobs(
   phenotype_concepts = research_phenotypes,
   phenotype_correlation_analysis = TRUE,
   joint_validation = TRUE,
   model_diagnostics = TRUE,
   progress = TRUE
+  # Now uses the same improved extraction as single phenotypes!
+  # - Concept hierarchy expansion with DISTINCT
+  # - Direct SQL approach  
+  # - Realistic healthcare utilization
 )
 
 # Display results

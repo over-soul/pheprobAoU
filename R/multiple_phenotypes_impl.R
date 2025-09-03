@@ -75,23 +75,8 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     cli::cli_alert_info("Phenotypes: {paste(phenotype_names, collapse = ', ')}")
   }
   
-  # Step 1: Extract total healthcare utilization once (shared across all phenotypes)
-  if (progress) cli::cli_progress_step("Extracting total healthcare utilization...")
-  
-  total_utilization <- extract_total_healthcare_utilization(
-    person_ids = validated_person_ids,
-    domains = validated_domains,
-    date_range = date_range,
-    exclude_concepts = exclude_concepts,
-    max_persons = NULL
-  )
-  
-  if (nrow(total_utilization) == 0) {
-    cli::cli_abort("No healthcare utilization data found")
-  }
-  
-  # Step 2: Process each phenotype
-  if (progress) cli::cli_progress_step("Processing individual phenotypes...")
+  # Step 1: Process each phenotype using improved extraction method
+  if (progress) cli::cli_progress_step("Processing individual phenotypes with concept hierarchy expansion...")
   
   phenotype_results <- list()
   phenotype_models <- list()
@@ -107,46 +92,19 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     
     if (progress) {
       cli::cli_progress_update(set = i)
-      cli::cli_alert_info("Processing {phenotype_name} ({i}/{n_phenotypes})...")
+      cli::cli_alert_info("Processing {phenotype_name} ({i}/{n_phenotypes}) with concept hierarchy expansion...")
     }
     
     tryCatch({
-      # Extract disease-relevant features for this phenotype
-      relevant_features <- extract_ehr_features(
+      # Use the improved data extraction with concept hierarchy expansion
+      phenotype_data <- extract_allofus_pheprob_data(
         concept_ids = concept_ids,
-        person_ids = total_utilization$person_id,
+        person_ids = validated_person_ids,
         domains = validated_domains,
         date_range = date_range,
+        expand_concepts = TRUE,  # Enable concept hierarchy expansion
         max_persons = NULL
       )
-      
-      # Aggregate to person level
-      if (nrow(relevant_features) > 0) {
-        relevant_counts <- relevant_features %>%
-          dplyr::group_by(.data$person_id) %>%
-          dplyr::summarise(
-            S = sum(.data$occurrence_count, na.rm = TRUE),
-            n_concepts = dplyr::n_distinct(.data$concept_id),
-            .groups = "drop"
-          )
-      } else {
-        relevant_counts <- tibble::tibble(
-          person_id = total_utilization$person_id,
-          S = 0L,
-          n_concepts = 0L
-        )
-      }
-      
-      # Combine with total utilization to create (S, C) pairs
-      phenotype_data <- total_utilization %>%
-        dplyr::select(.data$person_id, C = .data$total_code_count) %>%
-        dplyr::left_join(relevant_counts, by = "person_id") %>%
-        dplyr::mutate(
-          S = dplyr::if_else(is.na(.data$S), 0L, .data$S),
-          n_concepts = dplyr::if_else(is.na(.data$n_concepts), 0L, .data$n_concepts),
-          success_rate = .data$S / pmax(.data$C, 1)
-        ) %>%
-        dplyr::filter(.data$C > 0)  # Remove patients with zero total codes
       
       # Data validation for this phenotype
       phenotype_validation <- NULL
