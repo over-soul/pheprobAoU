@@ -194,21 +194,43 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     if (phenotype_name %in% names(phenotype_results) && !is.null(phenotype_results[[phenotype_name]])) {
       phenotype_data <- phenotype_results[[phenotype_name]]
       
-      # Since prepare_pheprob_binomial_data() now returns real date columns, directly select them
+      # Debug: Check what columns are actually available
+      available_cols <- names(phenotype_data)
       if (progress) {
-        cli::cli_alert_info("Available columns: {paste(names(phenotype_data), collapse = ', ')}")
+        cli::cli_alert_info("Available columns: {paste(available_cols, collapse = ', ')}")
       }
       
-      # Build total utilization with all the expected columns
+      # Check if date columns exist and build accordingly
       total_utilization <- phenotype_data %>%
-        dplyr::select(
-          .data$person_id, 
-          total_code_count = .data$C,
-          .data$first_code_date, 
-          .data$last_code_date, 
-          .data$healthcare_span_days
-        ) %>%
-        dplyr::distinct(.data$person_id, .keep_all = TRUE)  # Ensure unique persons
+        dplyr::select(.data$person_id, total_code_count = .data$C)
+      
+      # Add date columns only if they exist
+      if ("first_code_date" %in% available_cols) {
+        total_utilization <- total_utilization %>%
+          dplyr::mutate(
+            first_code_date = phenotype_data$first_code_date,
+            last_code_date = phenotype_data$last_code_date,
+            healthcare_span_days = phenotype_data$healthcare_span_days
+          )
+        if (progress) {
+          cli::cli_alert_success("Found and added real date columns")
+        }
+      } else {
+        # Add placeholder columns
+        total_utilization <- total_utilization %>%
+          dplyr::mutate(
+            first_code_date = as.Date(NA),
+            last_code_date = as.Date(NA),
+            healthcare_span_days = as.numeric(NA)
+          )
+        if (progress) {
+          cli::cli_alert_warning("Date columns missing - added placeholders")
+        }
+      }
+      
+      # Ensure unique persons
+      total_utilization <- total_utilization %>%
+        dplyr::distinct(.data$person_id, .keep_all = TRUE)
       
       break
     }
