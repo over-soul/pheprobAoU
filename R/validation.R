@@ -342,8 +342,9 @@ validate_domains <- function(domains) {
 #' validated <- validate_phenotype_coherence(phenotypes)
 #' }
 validate_phenotype_coherence <- function(phenotype_concepts, 
-                                       check_domains = TRUE,
-                                       max_domains_per_phenotype = 3) {
+                                        check_domains = TRUE,
+                                        max_domains_per_phenotype = 3,
+                                        con = NULL) {
   
   # Check if input is a named list
   if (!is.list(phenotype_concepts)) {
@@ -398,7 +399,7 @@ validate_phenotype_coherence <- function(phenotype_concepts,
   # Domain coherence check (if requested)
   domain_analysis <- NULL
   if (check_domains) {
-    domain_analysis <- analyze_phenotype_domain_coherence(validated_phenotypes, max_domains_per_phenotype)
+    domain_analysis <- analyze_phenotype_domain_coherence(validated_phenotypes, max_domains_per_phenotype, con)
     
     if (length(domain_analysis$warnings) > 0) {
       validation_warnings <- c(validation_warnings, domain_analysis$warnings)
@@ -435,7 +436,7 @@ validate_phenotype_coherence <- function(phenotype_concepts,
 #' @return Domain analysis results
 #'
 #' @keywords internal
-analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains_per_phenotype = 3) {
+analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains_per_phenotype = 3, con = NULL) {
   
   domain_analysis <- list()
   warnings <- character(0)
@@ -448,8 +449,15 @@ analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains
     
     # Query the concept table to get actual domain information
     tryCatch({
-      # Connect to database using the same approach as main data extraction
-      con <- allofus::aou_connect()
+      # Handle connection - use provided connection or create new one
+      connection_provided <- !is.null(con)
+      if (!connection_provided) {
+        # Ensure allofus package is available
+        if (!requireNamespace("allofus", quietly = TRUE)) {
+          cli::cli_abort("allofus package is required but not available")
+        }
+        con <- allofus::aou_connect()
+      }
       
       # Convert to integer to ensure proper data type
       concept_ids_integer <- as.integer(concept_ids)

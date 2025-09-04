@@ -57,10 +57,21 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
   
   start_time <- Sys.time()
   
-  # Input validation
+  # Step 0: Establish single database connection first (reused for all operations)
+  if (progress) cli::cli_progress_step("Establishing database connection...")
+  
+  # Ensure allofus package is available
+  if (!requireNamespace("allofus", quietly = TRUE)) {
+    cli::cli_abort("allofus package is required but not available")
+  }
+  
+  # Connect once and reuse for all operations
+  con <- allofus::aou_connect()
+  
+  # Input validation (with shared connection for database-dependent validations)
   if (progress) cli::cli_progress_step("Validating inputs...")
   
-  validated_phenotypes <- validate_phenotype_coherence(phenotype_concepts)
+  validated_phenotypes <- validate_phenotype_coherence(phenotype_concepts, con = con)
   
   person_validation <- validate_person_ids(person_ids)
   validated_person_ids <- person_validation$validated_person_ids
@@ -75,27 +86,9 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     cli::cli_alert_info("Phenotypes: {paste(phenotype_names, collapse = ', ')}")
   }
   
-  # Step 0: Establish single database connection (reused for all phenotypes)
-  if (progress) cli::cli_progress_step("Establishing database connection...")
-  
-  # Ensure allofus package is available
-  if (!requireNamespace("allofus", quietly = TRUE)) {
-    cli::cli_abort("allofus package is required but not available")
-  }
-  
-  # Connect once and reuse for all operations
-  con <- allofus::aou_connect()
-  
-  # Step 0.1: Extract total healthcare utilization using shared connection
-  if (progress) cli::cli_progress_step("Extracting total healthcare utilization...")
-  
-  total_utilization <- extract_total_healthcare_utilization(
-    person_ids = validated_person_ids,
-    domains = validated_domains,
-    date_range = date_range,
-    exclude_concepts = exclude_concepts,
-    con = con  # Pass the shared connection
-  )
+  # Step 0.1: We'll derive total healthcare utilization from the first phenotype
+  # This avoids BigQuery compatibility issues with the separate extraction function
+  total_utilization <- NULL
   
   # Step 1: Process each phenotype using shared connection
   if (progress) cli::cli_progress_step("Processing individual phenotypes with concept hierarchy expansion...")
@@ -179,18 +172,8 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
         cli::cli_alert_warning("✗ Error processing {phenotype_name}: {e$message}")
       }
       
-      # Create empty result to maintain structure
-      empty_result <- tibble::tibble(
-        person_id = total_utilization$person_id,
-        C = total_utilization$total_code_count,
-        S = 0L,
-        success_rate = 0,
-        !!paste0(phenotype_name, "_prob") := 0,
-        !!paste0(phenotype_name, "_case_posterior") := 0,
-        !!paste0(phenotype_name, "_control_posterior") := 1
-      )
-      
-      phenotype_results[[phenotype_name]] <- empty_result
+      # For failed phenotypes, we'll set them to NULL and handle in the combine step
+      phenotype_results[[phenotype_name]] <- NULL
       phenotype_models[[phenotype_name]] <- NULL
       phenotype_validations[[phenotype_name]] <- list(
         overall_quality = list(score = 0, interpretation = "Failed"),
@@ -201,6 +184,29 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
   
   if (progress) {
     cli::cli_progress_done()
+  }
+  
+  # Step 1.5: Derive total utilization from first successful phenotype
+  if (progress) cli::cli_progress_step("Deriving total healthcare utilization from phenotype results...")
+  
+  # Find the first successful phenotype result to use as base for total utilization
+  total_utilization <- NULL
+  for (phenotype_name in phenotype_names) {
+    if (phenotype_name %in% names(phenotype_results) && !is.null(phenotype_results[[phenotype_name]])) {
+      phenotype_data <- phenotype_results[[phenotype_name]]
+      total_utilization <- phenotype_data %>%
+        dplyr::select(.data$person_id, 
+                     total_code_count = .data$C,
+                     .data$first_code_date, 
+                     .data$last_code_date, 
+                     .data$healthcare_span_days) %>%
+        dplyr::distinct(.data$person_id, .keep_all = TRUE)  # Ensure unique persons
+      break
+    }
+  }
+  
+  if (is.null(total_utilization)) {
+    cli::cli_abort("No successful phenotype extractions - cannot derive total healthcare utilization")
   }
   
   # Step 2: Combine results across phenotypes
@@ -361,7 +367,7 @@ combine_multiple_phenotype_results_original <- function(phenotype_results,
   
   # Add each phenotype's results
   for (phenotype_name in phenotype_names) {
-    if (phenotype_name %in% names(phenotype_results)) {
+    if (phenotype_name %in% names(phenotype_results) && !is.null(phenotype_results[[phenotype_name]])) {
       phenotype_data <- phenotype_results[[phenotype_name]] %>%
         dplyr::select(.data$person_id, 
                      !!paste0(phenotype_name, "_relevant_codes") := .data$S,
@@ -372,6 +378,16 @@ combine_multiple_phenotype_results_original <- function(phenotype_results,
       
       combined <- combined %>%
         dplyr::left_join(phenotype_data, by = "person_id")
+    } else {
+      # Add zero columns for failed phenotypes
+      combined <- combined %>%
+        dplyr::mutate(
+          !!paste0(phenotype_name, "_relevant_codes") := 0L,
+          !!paste0(phenotype_name, "_success_rate") := 0,
+          !!paste0(phenotype_name, "_prob") := 0,
+          !!paste0(phenotype_name, "_case_posterior") := 0,
+          !!paste0(phenotype_name, "_control_posterior") := 1
+        )
     }
   }
   

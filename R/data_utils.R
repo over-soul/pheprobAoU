@@ -162,7 +162,7 @@ extract_total_healthcare_utilization <- function(person_ids = NULL,
       .by = person_id
     ) %>%
     dplyr::mutate(
-      healthcare_span_days = as.numeric(difftime(last_code_date, first_code_date, units = "days"))
+      healthcare_span_days = as.numeric(DATE_DIFF(last_code_date, first_code_date, DAY))
     ) %>%
     dplyr::mutate(
       healthcare_span_days = ifelse(is.na(healthcare_span_days), 0, healthcare_span_days)
