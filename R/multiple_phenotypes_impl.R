@@ -75,6 +75,16 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     cli::cli_alert_info("Phenotypes: {paste(phenotype_names, collapse = ', ')}")
   }
   
+  # Step 0: Extract total healthcare utilization (needed for combining results)
+  if (progress) cli::cli_progress_step("Extracting total healthcare utilization...")
+  
+  total_utilization <- extract_total_healthcare_utilization(
+    person_ids = validated_person_ids,
+    domains = validated_domains,
+    date_range = date_range,
+    exclude_concepts = exclude_concepts
+  )
+  
   # Step 1: Process each phenotype using improved extraction method
   if (progress) cli::cli_progress_step("Processing individual phenotypes with concept hierarchy expansion...")
   
@@ -180,7 +190,7 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     cli::cli_progress_done()
   }
   
-  # Step 3: Combine results across phenotypes
+  # Step 2: Combine results across phenotypes
   if (progress) cli::cli_progress_step("Combining results across phenotypes...")
   
   combined_results <- combine_multiple_phenotype_results_original(
@@ -189,7 +199,7 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     phenotype_names
   )
   
-  # Step 4: Phenotype correlation analysis
+  # Step 3: Phenotype correlation analysis
   correlation_analysis <- NULL
   if (phenotype_correlation_analysis && n_phenotypes > 1) {
     if (progress) cli::cli_progress_step("Analyzing phenotype correlations...")
@@ -200,7 +210,7 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     )
   }
   
-  # Step 5: Joint validation across phenotypes
+  # Step 4: Joint validation across phenotypes
   joint_validation_results <- NULL
   if (joint_validation && n_phenotypes > 1) {
     if (progress) cli::cli_progress_step("Performing joint validation...")
@@ -213,7 +223,7 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     )
   }
   
-  # Step 6: Create comprehensive metadata
+  # Step 5: Create comprehensive metadata
   end_time <- Sys.time()
   
   metadata <- list(
@@ -246,14 +256,14 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     metadata$joint_validation <- joint_validation_results
   }
   
-  # Step 7: Format output
+  # Step 6: Format output
   formatted_output <- format_multiple_original_output(
     combined_results,
     output_format,
     metadata
   )
   
-  # Step 8: Save to file if requested
+  # Step 7: Save to file if requested
   if (!is.null(output_file)) {
     if (progress) cli::cli_progress_step("Saving results to file...")
     export_multiple_original_results(formatted_output, output_file)
