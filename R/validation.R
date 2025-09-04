@@ -448,15 +448,17 @@ analyze_phenotype_domain_coherence <- function(validated_phenotypes, max_domains
     
     # Query the concept table to get actual domain information
     tryCatch({
-      # Query All of Us concept table to get domain information for concepts
-      concept_ids_str <- paste(concept_ids, collapse = ", ")
-      domain_query <- glue::glue("
-        SELECT concept_id, domain_id, concept_name
-        FROM concept 
-        WHERE concept_id IN ({concept_ids_str})
-      ")
+      # Connect to database using the same approach as main data extraction
+      con <- allofus::aou_connect()
       
-      concept_info <- allofus::aou_sql(domain_query)
+      # Convert to integer to ensure proper data type
+      concept_ids_integer <- as.integer(concept_ids)
+      
+      # Query All of Us concept table using dplyr approach (same as main extraction)
+      concept_info <- dplyr::tbl(con, "concept") %>%
+        dplyr::filter(concept_id %in% !!concept_ids_integer) %>%
+        dplyr::select(concept_id, domain_id, concept_name) %>%
+        dplyr::collect()
       
       if (nrow(concept_info) > 0) {
         n_concepts <- nrow(concept_info)
