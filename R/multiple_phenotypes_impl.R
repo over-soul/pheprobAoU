@@ -75,17 +75,29 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     cli::cli_alert_info("Phenotypes: {paste(phenotype_names, collapse = ', ')}")
   }
   
-  # Step 0: Extract total healthcare utilization (needed for combining results)
+  # Step 0: Establish single database connection (reused for all phenotypes)
+  if (progress) cli::cli_progress_step("Establishing database connection...")
+  
+  # Ensure allofus package is available
+  if (!requireNamespace("allofus", quietly = TRUE)) {
+    cli::cli_abort("allofus package is required but not available")
+  }
+  
+  # Connect once and reuse for all operations
+  con <- allofus::aou_connect()
+  
+  # Step 0.1: Extract total healthcare utilization using shared connection
   if (progress) cli::cli_progress_step("Extracting total healthcare utilization...")
   
   total_utilization <- extract_total_healthcare_utilization(
     person_ids = validated_person_ids,
     domains = validated_domains,
     date_range = date_range,
-    exclude_concepts = exclude_concepts
+    exclude_concepts = exclude_concepts,
+    con = con  # Pass the shared connection
   )
   
-  # Step 1: Process each phenotype using improved extraction method
+  # Step 1: Process each phenotype using shared connection
   if (progress) cli::cli_progress_step("Processing individual phenotypes with concept hierarchy expansion...")
   
   phenotype_results <- list()
@@ -106,14 +118,15 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     }
     
     tryCatch({
-      # Use the improved data extraction with concept hierarchy expansion
+      # Use the improved data extraction with shared connection
       phenotype_data <- extract_allofus_pheprob_data(
         concept_ids = concept_ids,
         person_ids = validated_person_ids,
         domains = validated_domains,
         date_range = date_range,
         expand_concepts = TRUE,  # Enable concept hierarchy expansion
-        max_persons = NULL
+        max_persons = NULL,
+        con = con  # Pass the shared connection
       )
       
       # Data validation for this phenotype
