@@ -193,13 +193,50 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
   for (phenotype_name in phenotype_names) {
     if (phenotype_name %in% names(phenotype_results) && !is.null(phenotype_results[[phenotype_name]])) {
       phenotype_data <- phenotype_results[[phenotype_name]]
+      
+      # Check what columns are actually available
+      available_cols <- names(phenotype_data)
+      if (progress) {
+        cli::cli_alert_info("Available columns: {paste(available_cols, collapse = ', ')}")
+      }
+      
+      # Build total utilization with available columns
       total_utilization <- phenotype_data %>%
-        dplyr::select(.data$person_id, 
-                     total_code_count = .data$C,
-                     .data$first_code_date, 
-                     .data$last_code_date, 
-                     .data$healthcare_span_days) %>%
-        dplyr::distinct(.data$person_id, .keep_all = TRUE)  # Ensure unique persons
+        dplyr::select(.data$person_id, total_code_count = .data$C)
+      
+      # Add date columns if they exist
+      if ("first_code_date" %in% available_cols) {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(first_code_date = phenotype_data$first_code_date)
+      } else if ("concept_date" %in% available_cols) {
+        # Use concept_date if available
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(first_code_date = phenotype_data$concept_date)
+      } else {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(first_code_date = as.Date(NA))
+      }
+      
+      if ("last_code_date" %in% available_cols) {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(last_code_date = phenotype_data$last_code_date)
+      } else {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(last_code_date = as.Date(NA))
+      }
+      
+      if ("healthcare_span_days" %in% available_cols) {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(healthcare_span_days = phenotype_data$healthcare_span_days)
+      } else {
+        total_utilization <- total_utilization %>% 
+          dplyr::mutate(healthcare_span_days = as.numeric(NA))
+      }
+      
+      # Ensure unique persons
+      total_utilization <- total_utilization %>%
+        dplyr::distinct(.data$person_id, .keep_all = TRUE)
+      
       break
     }
   }
