@@ -148,9 +148,10 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
         phenotype_models[[phenotype_name]] <- mixture_model
       }
       
-      # Create results for this phenotype
+      # Create results for this phenotype (preserve date columns)
       phenotype_result <- phenotype_data %>%
-        dplyr::select(.data$person_id, .data$C, .data$S, .data$success_rate) %>%
+        dplyr::select(.data$person_id, .data$C, .data$S, .data$success_rate, 
+                     .data$first_code_date, .data$last_code_date, .data$healthcare_span_days) %>%
         dplyr::mutate(
           !!paste0(phenotype_name, "_prob") := mixture_model$phenotype_probabilities,
           !!paste0(phenotype_name, "_case_posterior") := mixture_model$posterior_probabilities[, "case"],
