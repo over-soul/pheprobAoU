@@ -111,15 +111,14 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     }
     
     tryCatch({
-      # Use the improved data extraction with shared connection
-      phenotype_data <- extract_allofus_pheprob_data(
+      # Use the same data preparation approach as single phenotype implementation
+      phenotype_data <- prepare_pheprob_binomial_data(
         concept_ids = concept_ids,
         person_ids = validated_person_ids,
         domains = validated_domains,
         date_range = date_range,
-        expand_concepts = TRUE,  # Enable concept hierarchy expansion
-        max_persons = NULL,
-        con = con  # Pass the shared connection
+        exclude_concepts = exclude_concepts,
+        max_persons = NULL
       )
       
       # Data validation for this phenotype
