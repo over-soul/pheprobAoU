@@ -198,7 +198,15 @@ extract_allofus_pheprob_data_with_connection <- function(con,
         condition_source_concept_id != 0 ~ 1L,
         TRUE ~ 0L
       ), na.rm = TRUE),
+      first_code_date = min(condition_start_date, na.rm = TRUE),
+      last_code_date = max(condition_start_date, na.rm = TRUE),
       .by = person_id
+    ) %>%
+    dplyr::mutate(
+      healthcare_span_days = as.numeric(DATE_DIFF(last_code_date, first_code_date, DAY))
+    ) %>%
+    dplyr::mutate(
+      healthcare_span_days = ifelse(is.na(healthcare_span_days), 0, healthcare_span_days)
     )
   
   # Step 4: Calculate disease-relevant codes (S)
@@ -232,7 +240,7 @@ extract_allofus_pheprob_data_with_connection <- function(con,
       S = disease_codes,
       success_rate = S / C
     ) %>%
-    dplyr::select(person_id, S, C, success_rate) %>%
+    dplyr::select(person_id, S, C, success_rate, first_code_date, last_code_date, healthcare_span_days) %>%
     dplyr::collect()
   
   # Remove patients with zero total codes (no healthcare utilization)
@@ -288,10 +296,10 @@ prepare_pheprob_binomial_data_allofus <- function(concept_ids,
       S = as.numeric(S),
       C = as.numeric(C),
       success_rate = as.numeric(success_rate),
-      # Add placeholders for additional columns (these would need more complex logic to compute accurately)
-      first_code_date = as.Date(NA),
-      last_code_date = as.Date(NA), 
-      healthcare_span_days = as.numeric(NA)
+      # Date columns are now extracted from real data
+      first_code_date = as.Date(first_code_date),
+      last_code_date = as.Date(last_code_date), 
+      healthcare_span_days = as.numeric(healthcare_span_days)
     )
   
   return(result)
