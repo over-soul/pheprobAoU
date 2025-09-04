@@ -116,10 +116,9 @@ extract_total_healthcare_utilization <- function(person_ids = NULL,
     cohort <- dplyr::tbl(con, "person") %>%
       dplyr::distinct(person_id)
     
+    # Note: max_persons limit will be applied after data collection
     if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0) {
-      cohort <- cohort %>% 
-        dplyr::slice_head(n = as.integer(max_persons))
-      cli::cli_alert_info("Limited to {max_persons} participants for testing")
+      cli::cli_alert_info("Will limit to {max_persons} participants after data collection")
     }
   }
   
@@ -178,6 +177,13 @@ extract_total_healthcare_utilization <- function(person_ids = NULL,
       measurement_count = 0L,
       observation_count = 0L
     )
+  
+  # Apply max_persons limit if specified (now that data is collected)
+  if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0 && nrow(total_utilization) > max_persons) {
+    total_utilization <- total_utilization %>%
+      dplyr::slice_head(n = as.integer(max_persons))
+    cli::cli_alert_info("Limited final results to {max_persons} participants")
+  }
   
   cli::cli_alert_success("Extracted total counts for {nrow(total_utilization)} persons")
   if (nrow(total_utilization) > 0) {

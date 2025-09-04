@@ -134,11 +134,9 @@ extract_allofus_pheprob_data_with_connection <- function(con,
     cohort <- dplyr::tbl(con, "person") %>%
       dplyr::distinct(person_id)
     
-    # Apply max_persons limit if specified
+    # Note: max_persons limit will be applied after data collection
     if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0) {
-      cohort <- cohort %>% 
-        dplyr::slice_head(n = as.integer(max_persons))
-      cli::cli_alert_info("Limited to {max_persons} participants for testing")
+      cli::cli_alert_info("Will limit to {max_persons} participants after data collection")
     }
   }
   
@@ -202,8 +200,9 @@ extract_allofus_pheprob_data_with_connection <- function(con,
       last_code_date = max(condition_start_date, na.rm = TRUE),
       .by = person_id
     ) %>%
+    dplyr::collect() %>%  # Collect BEFORE date calculations
     dplyr::mutate(
-      healthcare_span_days = as.numeric(DATE_DIFF(last_code_date, first_code_date, DAY))
+      healthcare_span_days = as.numeric(difftime(last_code_date, first_code_date, units = "days"))
     ) %>%
     dplyr::mutate(
       healthcare_span_days = ifelse(is.na(healthcare_span_days), 0, healthcare_span_days)
@@ -222,12 +221,16 @@ extract_allofus_pheprob_data_with_connection <- function(con,
         TRUE ~ 0L
       ), na.rm = TRUE),
       .by = person_id
-    )
+    ) %>%
+    dplyr::collect()
   
   # Step 5: Combine into final PheProb dataset
   cli::cli_progress_step("Combining data for PheProb analysis...")
   
-  pheprob_data <- cohort %>%
+  # Collect cohort and combine with already collected data
+  cohort_collected <- cohort %>% dplyr::collect()
+  
+  pheprob_data <- cohort_collected %>%
     dplyr::left_join(total_utilization, by = "person_id") %>%
     dplyr::left_join(disease_codes, by = "person_id") %>%
     dplyr::mutate(
@@ -240,12 +243,18 @@ extract_allofus_pheprob_data_with_connection <- function(con,
       S = disease_codes,
       success_rate = S / C
     ) %>%
-    dplyr::select(person_id, S, C, success_rate, first_code_date, last_code_date, healthcare_span_days) %>%
-    dplyr::collect()
+    dplyr::select(person_id, S, C, success_rate, first_code_date, last_code_date, healthcare_span_days)
   
   # Remove patients with zero total codes (no healthcare utilization)
   pheprob_data <- pheprob_data %>%
     dplyr::filter(C > 0)
+  
+  # Apply max_persons limit if specified (now that data is collected)
+  if (!is.null(max_persons) && is.numeric(max_persons) && max_persons > 0 && nrow(pheprob_data) > max_persons) {
+    pheprob_data <- pheprob_data %>%
+      dplyr::slice_head(n = as.integer(max_persons))
+    cli::cli_alert_info("Limited final results to {max_persons} participants")
+  }
   
   cli::cli_alert_success("Extracted data for {nrow(pheprob_data)} patients with healthcare utilization")
   
