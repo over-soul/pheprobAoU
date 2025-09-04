@@ -21,6 +21,7 @@ NULL
 #' @param verbose Logical indicating whether to print progress (default: TRUE)
 #' @param init_method Initialization method: "random", "kmeans", or "manual" (default: "random")
 #' @param regularization Small value added to prevent numerical issues (default: 1e-8)
+#' @param phenotype_name Optional name of the phenotype for clearer progress messages
 #'
 #' @return A list containing:
 #'   \item{parameters}{List with p_1, p_0, alpha_0, alpha_1}
@@ -60,15 +61,17 @@ fit_pheprob_binomial_mixture <- function(S,
                                         convergence_threshold = 1e-6,
                                         verbose = TRUE,
                                         init_method = "random",
-                                        regularization = 1e-8) {
+                                        regularization = 1e-8,
+                                        phenotype_name = NULL) {
   
   # Input validation
-  validate_binomial_mixture_inputs(S, C)
+  validate_binomial_mixture_inputs(S, C, phenotype_name)
   
   n <- length(S)
   
   if (verbose) {
-    cli::cli_alert_info("Fitting binomial mixture model with {n} patients")
+    phenotype_context <- if (!is.null(phenotype_name)) paste0(" for phenotype '", phenotype_name, "'") else ""
+    cli::cli_alert_info("Fitting binomial mixture model{phenotype_context} with {n} patients")
     cli::cli_alert_info("Total codes range: {min(C)} - {max(C)}")
     cli::cli_alert_info("Relevant codes range: {min(S)} - {max(S)}")
   }
@@ -113,8 +116,9 @@ fit_pheprob_binomial_mixture <- function(S,
       
       if (abs(improvement) < convergence_threshold) {
         if (verbose) {
+          phenotype_context <- if (!is.null(phenotype_name)) paste0(" for phenotype '", phenotype_name, "'") else ""
           cli::cli_progress_done()
-          cli::cli_alert_success("EM converged at iteration {iter}")
+          cli::cli_alert_success("EM converged{phenotype_context} at iteration {iter}")
         }
         converged <- TRUE
         break
@@ -122,7 +126,8 @@ fit_pheprob_binomial_mixture <- function(S,
       
       # Check for likelihood decrease (numerical issues)
       if (improvement < -1e-6) {
-        cli::cli_alert_warning("Log-likelihood decreased at iteration {iter} (improvement: {round(improvement, 8)})")
+        phenotype_context <- if (!is.null(phenotype_name)) paste0(" for phenotype '", phenotype_name, "'") else ""
+        cli::cli_alert_warning("Log-likelihood decreased{phenotype_context} at iteration {iter} (improvement: {round(improvement, 8)})")
       }
     }
     
@@ -134,8 +139,9 @@ fit_pheprob_binomial_mixture <- function(S,
   }
   
   if (!converged && verbose) {
+    phenotype_context <- if (!is.null(phenotype_name)) paste0(" for phenotype '", phenotype_name, "'") else ""
     cli::cli_progress_done()
-    cli::cli_alert_warning("EM did not converge within {max_iterations} iterations")
+    cli::cli_alert_warning("EM did not converge{phenotype_context} within {max_iterations} iterations")
   }
   
   # Final E-step for final probabilities
@@ -402,9 +408,10 @@ initialize_binomial_mixture_parameters <- function(S, C, method = "random") {
 #'
 #' @param S Vector of disease-relevant code counts
 #' @param C Vector of total code counts
+#' @param phenotype_name Optional name of the phenotype for clearer error messages
 #'
 #' @keywords internal
-validate_binomial_mixture_inputs <- function(S, C) {
+validate_binomial_mixture_inputs <- function(S, C, phenotype_name = NULL) {
   
   # Check basic requirements
   if (!is.numeric(S) || !is.numeric(C)) {
@@ -434,29 +441,32 @@ validate_binomial_mixture_inputs <- function(S, C) {
     cli::cli_abort("Disease-relevant codes (S) cannot exceed total codes (C). Found {n_violations} violations.")
   }
   
+  # Prepare phenotype context for messages
+  phenotype_context <- if (!is.null(phenotype_name)) paste0(" for phenotype '", phenotype_name, "'") else ""
+  
   # Check for sufficient variation
   if (var(S) == 0) {
-    cli::cli_alert_warning("No variation in disease-relevant code counts")
+    cli::cli_alert_warning("No variation in disease-relevant code counts{phenotype_context}")
   }
   
   if (var(C) == 0) {
-    cli::cli_alert_warning("No variation in total code counts")
+    cli::cli_alert_warning("No variation in total code counts{phenotype_context}")
   }
   
   # Check for extreme values
   if (any(C == 0)) {
     n_zero <- sum(C == 0)
-    cli::cli_alert_warning("Found {n_zero} patients with zero total codes")
+    cli::cli_alert_warning("Found {n_zero} patients with zero total codes{phenotype_context}")
   }
   
   # Data quality warnings
   mean_rate <- mean(S / pmax(C, 1))
   if (mean_rate < 0.01) {
-    cli::cli_alert_warning("Very low disease-relevant code rate ({round(mean_rate, 4)}). Check concept definitions.")
+    cli::cli_alert_warning("Very low disease-relevant code rate ({round(mean_rate, 4)}){phenotype_context}. Check concept definitions.")
   }
   
   if (mean_rate > 0.8) {
-    cli::cli_alert_warning("Very high disease-relevant code rate ({round(mean_rate, 4)}). Check concept definitions.")
+    cli::cli_alert_warning("Very high disease-relevant code rate ({round(mean_rate, 4)}){phenotype_context}. Check concept definitions.")
   }
 }
 

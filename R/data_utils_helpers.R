@@ -502,11 +502,12 @@ extract_domain_from_table <- function(table_name) {
 #'
 #' @param pheprob_data Tibble with S, C, and other columns
 #' @param concept_ids Original concept IDs used
+#' @param phenotype_name Optional name of the phenotype for clearer error messages
 #'
 #' @return List with validation results and recommendations
 #'
 #' @export
-validate_binomial_data_quality <- function(pheprob_data, concept_ids = NULL) {
+validate_binomial_data_quality <- function(pheprob_data, concept_ids = NULL, phenotype_name = NULL) {
   
   validation_results <- list()
   
@@ -542,27 +543,30 @@ validate_binomial_data_quality <- function(pheprob_data, concept_ids = NULL) {
     bimodality_test = assess_bimodality(success_rates)
   )
   
+  # Prepare phenotype context for messages
+  phenotype_context <- if (!is.null(phenotype_name)) glue::glue(" for phenotype '{phenotype_name}'") else ""
+  
   # Warnings and recommendations
   warnings <- character(0)
   recommendations <- character(0)
   
   if (constraint_violations > 0) {
-    warnings <- c(warnings, glue::glue("{constraint_violations} patients have S > C"))
+    warnings <- c(warnings, glue::glue("{constraint_violations} patients have S > C{phenotype_context}"))
     recommendations <- c(recommendations, "Review concept definitions and data extraction logic")
   }
   
   if (validation_results$summary_stats$mean_success_rate < 0.01) {
-    warnings <- c(warnings, "Very low disease-relevant code rate")
+    warnings <- c(warnings, glue::glue("Very low disease-relevant code rate{phenotype_context}"))
     recommendations <- c(recommendations, "Consider expanding concept definitions or checking phenotype validity")
   }
   
   if (validation_results$summary_stats$mean_success_rate > 0.5) {
-    warnings <- c(warnings, "Very high disease-relevant code rate")
+    warnings <- c(warnings, glue::glue("Very high disease-relevant code rate{phenotype_context}"))
     recommendations <- c(recommendations, "Consider restricting concept definitions or checking for data quality issues")
   }
   
   if (validation_results$summary_stats$zero_total_codes > nrow(pheprob_data) * 0.1) {
-    warnings <- c(warnings, "Many patients with zero total codes")
+    warnings <- c(warnings, glue::glue("Many patients with zero total codes{phenotype_context}"))
     recommendations <- c(recommendations, "Review inclusion criteria and data availability")
   }
   

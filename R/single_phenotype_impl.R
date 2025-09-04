@@ -88,7 +88,8 @@ calculate_pheprob_method <- function(concept_ids,
     
     validation_results <- validate_binomial_data_quality(
       pheprob_data, 
-      concept_ids = validated_concept_ids
+      concept_ids = validated_concept_ids,
+      phenotype_name = NULL  # Single phenotype - no name ambiguity
     )
     
     if (validation_results$overall_quality$score < 60) {
@@ -115,7 +116,8 @@ calculate_pheprob_method <- function(concept_ids,
     max_iterations = max_iterations,
     convergence_threshold = convergence_threshold,
     verbose = progress,
-    init_method = init_method
+    init_method = init_method,
+    phenotype_name = NULL  # Single phenotype - no name ambiguity
   )
   
   if (!mixture_model$convergence && progress) {

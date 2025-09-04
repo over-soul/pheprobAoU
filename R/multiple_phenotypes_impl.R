@@ -111,7 +111,8 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
       if (data_validation) {
         phenotype_validation <- validate_binomial_data_quality(
           phenotype_data, 
-          concept_ids = concept_ids
+          concept_ids = concept_ids,
+          phenotype_name = phenotype_name
         )
         phenotype_validations[[phenotype_name]] <- phenotype_validation
       }
@@ -123,7 +124,8 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
         max_iterations = max_iterations,
         convergence_threshold = convergence_threshold,
         verbose = FALSE,  # Suppress individual model progress
-        init_method = init_method
+        init_method = init_method,
+        phenotype_name = phenotype_name
       )
       
       # Store model for later analysis
