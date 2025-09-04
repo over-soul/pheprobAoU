@@ -212,15 +212,44 @@ calculate_multiple_pheprobs_method <- function(phenotype_concepts,
     phenotype_names
   )
   
+  # Debug: Check probability columns
+  if (progress) {
+    prob_cols <- paste0(phenotype_names, "_prob")
+    existing_prob_cols <- prob_cols[prob_cols %in% names(combined_results)]
+    if (length(existing_prob_cols) > 0) {
+      cli::cli_alert_info("Found probability columns: {paste(existing_prob_cols, collapse = ', ')}")
+      for (col in existing_prob_cols) {
+        vals <- combined_results[[col]]
+        non_na_vals <- vals[!is.na(vals)]
+        if (length(non_na_vals) > 0) {
+          cli::cli_alert_info("{col}: {length(non_na_vals)} non-NA values, range: {round(min(non_na_vals), 3)} - {round(max(non_na_vals), 3)}")
+        } else {
+          cli::cli_alert_warning("{col}: All values are NA")
+        }
+      }
+    } else {
+      cli::cli_alert_warning("No probability columns found in combined results")
+      cli::cli_alert_info("Available columns: {paste(names(combined_results), collapse = ', ')}")
+    }
+  }
+  
   # Step 3: Phenotype correlation analysis
   correlation_analysis <- NULL
   if (phenotype_correlation_analysis && n_phenotypes > 1) {
     if (progress) cli::cli_progress_step("Analyzing phenotype correlations...")
     
-    correlation_analysis <- analyze_phenotype_correlations_original(
-      combined_results, 
-      phenotype_names
-    )
+    tryCatch({
+      correlation_analysis <- analyze_phenotype_correlations_original(
+        combined_results, 
+        phenotype_names
+      )
+    }, error = function(e) {
+      if (progress) {
+        cli::cli_alert_warning("Correlation analysis failed: {e$message}")
+        cli::cli_alert_info("Continuing without correlation analysis...")
+      }
+      correlation_analysis <<- NULL
+    })
   }
   
   # Step 4: Joint validation across phenotypes
@@ -367,7 +396,43 @@ analyze_phenotype_correlations_original <- function(combined_results, phenotype_
   
   # Extract probability columns
   prob_cols <- paste0(phenotype_names, "_prob")
+  
+  # Check if probability columns exist
+  missing_cols <- prob_cols[!prob_cols %in% names(combined_results)]
+  if (length(missing_cols) > 0) {
+    cli::cli_abort("Missing probability columns in combined results: {paste(missing_cols, collapse = ', ')}")
+  }
+  
   prob_data <- combined_results[prob_cols]
+  
+  # Check if there's any non-NA data
+  if (all(is.na(prob_data))) {
+    cli::cli_abort("All probability data is NA - cannot calculate correlations")
+  }
+  
+  # Check if any columns have non-zero variance
+  non_constant_cols <- sapply(prob_data, function(x) {
+    x_clean <- x[!is.na(x)]
+    length(unique(x_clean)) > 1
+  })
+  
+  if (!any(non_constant_cols)) {
+    cli::cli_alert_warning("All probability columns are constant - skipping correlation analysis")
+    return(list(
+      correlation_matrix = NULL,
+      pairwise_correlations = list(),
+      strong_correlations = list(),
+      comorbidity_patterns = analyze_comorbidity_patterns(combined_results, phenotype_names),
+      summary = list(
+        n_phenotypes = length(phenotype_names),
+        n_pairs_tested = 0,
+        n_strong_correlations = 0,
+        max_correlation = NA,
+        mean_correlation = NA,
+        warning = "All probability columns are constant"
+      )
+    ))
+  }
   
   # Calculate correlation matrix
   correlation_matrix <- cor(prob_data, use = "complete.obs")
